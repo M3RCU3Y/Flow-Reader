@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Focus Reader</title>
+    
+    <!-- Google Fonts: Merriweather (Serif) and Inter (Sans-Serif) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:wght@300;400;700;900&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'app-bg': 'rgb(var(--color-app-bg) / <alpha-value>)',
+              'panel-bg': 'rgb(var(--color-panel-bg) / <alpha-value>)',
+              'accent-red': 'rgb(var(--color-accent) / <alpha-value>)',
+              'text-primary': 'rgb(var(--color-text-primary) / <alpha-value>)',
+              'text-secondary': 'rgb(var(--color-text-secondary) / <alpha-value>)',
+              'bionic-highlight': 'rgb(var(--color-bionic-highlight) / <alpha-value>)',
+              'progress': 'rgb(var(--color-progress) / <alpha-value>)',
+            },
+            fontFamily: {
+              header: ['"Playfair Display"', 'serif'],
+              ui: ['"Inter"', 'sans-serif'],
+            },
+            boxShadow: {
+              'glow': '0 0 20px rgba(var(--color-accent), 0.15)',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --color-app-bg: 15 15 16;
+        --color-panel-bg: 24 24 27;
+        --color-text-primary: 255 255 255;
+        --color-text-secondary: 161 161 170;
+        --color-accent: 255 71 87;
+        --color-bionic-highlight: 255 107 107;
+        --color-progress: 255 71 87;
+      }
+      body {
+        background-color: rgb(var(--color-app-bg));
+        color: rgb(var(--color-text-primary));
+        font-family: 'Inter', sans-serif;
+      }
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: rgb(var(--color-app-bg)); }
+      ::-webkit-scrollbar-thumb { background: rgba(var(--color-text-secondary), 0.35); border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(var(--color-text-secondary), 0.5); }
+    </style>
+
+    <!-- PDF.js for parsing PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      // Initialize PDF.js worker
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+    </script>
+</head>
+  <body class="bg-app-bg text-text-primary font-sans antialiased overflow-x-hidden selection:bg-accent-red selection:text-text-primary">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
