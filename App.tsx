@@ -32,6 +32,11 @@ export default function App() {
   const uiIdleTimeoutRef = useRef<number | null>(null);
   const [isBionicScrolling, setIsBionicScrolling] = useState(false);
   const bionicScrollIdleTimeoutRef = useRef<number | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const touchMovedRef = useRef(false);
+  const tapHideTimeoutTopRef = useRef<number | null>(null);
+  const tapHideTimeoutBottomRef = useRef<number | null>(null);
+  const suppressRevealUntilRef = useRef(0);
   const [isTopHotspotActive, setIsTopHotspotActive] = useState(false);
   const [isBottomHotspotActive, setIsBottomHotspotActive] = useState(false);
   const topHotspotHideTimeoutRef = useRef<number | null>(null);
@@ -570,8 +575,8 @@ export default function App() {
     };
   }, [activeBook?.id, mode, isThemeEngaged]);
 
-  useEffect(() => {
-    if (!activeBook || mode !== 'bionic_flow') return;
+	useEffect(() => {
+	  if (!activeBook || mode !== 'bionic_flow') return;
 
     // Bionic mode is "zen": UI stays hidden unless the user reaches for it (hotspots or focus).
     setIsUiVisible(false);
@@ -583,36 +588,55 @@ export default function App() {
     setIsHeaderFocused(false);
     setIsFooterFocused(false);
 
-    const TOP_HOTSPOT_PX = 160;
-    const BOTTOM_HOTSPOT_PX = 280;
-    const hideDelayMs = 380;
+	    const TOP_HOTSPOT_PX = 160;
+	    const BOTTOM_HOTSPOT_PX = 280;
+	    const hideDelayMs = 380;
+	    const tapHoldMs = 1800;
+	    const revealSuppressAfterScrollMs = 400;
+	    const scrollIdleMs = 420;
 
-    const clearHotspotTimers = () => {
-      if (topHotspotHideTimeoutRef.current) {
-        window.clearTimeout(topHotspotHideTimeoutRef.current);
-        topHotspotHideTimeoutRef.current = null;
-      }
-      if (bottomHotspotHideTimeoutRef.current) {
-        window.clearTimeout(bottomHotspotHideTimeoutRef.current);
-        bottomHotspotHideTimeoutRef.current = null;
-      }
-    };
+	    const clearTapTimers = () => {
+	      if (tapHideTimeoutTopRef.current) {
+	        window.clearTimeout(tapHideTimeoutTopRef.current);
+	        tapHideTimeoutTopRef.current = null;
+	      }
+	      if (tapHideTimeoutBottomRef.current) {
+	        window.clearTimeout(tapHideTimeoutBottomRef.current);
+	        tapHideTimeoutBottomRef.current = null;
+	      }
+	    };
 
-    const handleScroll = () => {
-      setIsBionicScrolling(true);
-      // While scrolling: force-hide. Reveal is only via subsequent hotspot/focus.
-      clearHotspotTimers();
-      setIsTopHotspotActive(false);
-      setIsBottomHotspotActive(false);
-      pointerInTopHotspotRef.current = false;
-      pointerInBottomHotspotRef.current = false;
-      if (bionicScrollIdleTimeoutRef.current) {
-        window.clearTimeout(bionicScrollIdleTimeoutRef.current);
-      }
-      bionicScrollIdleTimeoutRef.current = window.setTimeout(() => {
-        setIsBionicScrolling(false);
-      }, 180);
-    };
+	    const clearHotspotTimers = () => {
+	      if (topHotspotHideTimeoutRef.current) {
+	        window.clearTimeout(topHotspotHideTimeoutRef.current);
+	        topHotspotHideTimeoutRef.current = null;
+	      }
+	      if (bottomHotspotHideTimeoutRef.current) {
+	        window.clearTimeout(bottomHotspotHideTimeoutRef.current);
+	        bottomHotspotHideTimeoutRef.current = null;
+	      }
+	    };
+
+	    const handleScroll = () => {
+	      suppressRevealUntilRef.current =
+	        (typeof performance !== 'undefined' ? performance.now() : Date.now()) + revealSuppressAfterScrollMs;
+	      setIsBionicScrolling(true);
+	      // While scrolling: force-hide. Reveal is only via subsequent hotspot/focus.
+	      clearTapTimers();
+	      clearHotspotTimers();
+	      setIsTopHotspotActive(false);
+	      setIsBottomHotspotActive(false);
+	      pointerInTopHotspotRef.current = false;
+	      pointerInBottomHotspotRef.current = false;
+	      touchStartRef.current = null;
+	      touchMovedRef.current = false;
+	      if (bionicScrollIdleTimeoutRef.current) {
+	        window.clearTimeout(bionicScrollIdleTimeoutRef.current);
+	      }
+	      bionicScrollIdleTimeoutRef.current = window.setTimeout(() => {
+	        setIsBionicScrolling(false);
+	      }, scrollIdleMs);
+	    };
 
     const updateHotspot = (withinTop: boolean, withinBottom: boolean) => {
       pointerInTopHotspotRef.current = withinTop;
@@ -657,25 +681,107 @@ export default function App() {
       updateHotspot(withinTop, withinBottom);
     };
 
-    const handleTouchStart = (event: TouchEvent) => {
-      const touch = event.touches[0];
-      if (!touch) return;
-      const withinTop = touch.clientY <= TOP_HOTSPOT_PX;
-      const withinBottom = touch.clientY >= window.innerHeight - BOTTOM_HOTSPOT_PX;
-      clearHotspotTimers();
-      pointerInTopHotspotRef.current = withinTop;
-      pointerInBottomHotspotRef.current = withinBottom;
-      setIsTopHotspotActive(withinTop);
-      setIsBottomHotspotActive(withinBottom);
-    };
+	    const handleTouchStart = (event: TouchEvent) => {
+	      const touch = event.touches[0];
+	      if (!touch) return;
+	      touchStartRef.current = {
+	        x: touch.clientX,
+	        y: touch.clientY,
+	        t: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+	      };
+	      touchMovedRef.current = false;
+	      // Do not reveal on touchstart; a swipe should not flash controls.
+	    };
 
-    const handleTouchEnd = () => {
-      clearHotspotTimers();
-      pointerInTopHotspotRef.current = false;
-      pointerInBottomHotspotRef.current = false;
-      setIsTopHotspotActive(false);
-      setIsBottomHotspotActive(false);
-    };
+	    const handleTouchMove = (event: TouchEvent) => {
+	      const start = touchStartRef.current;
+	      const touch = event.touches[0];
+	      if (!start || !touch) return;
+	      const dx = touch.clientX - start.x;
+	      const dy = touch.clientY - start.y;
+	      if (Math.hypot(dx, dy) > 10) {
+	        touchMovedRef.current = true;
+	      }
+	    };
+
+	    const scheduleHideTop = () => {
+	      if (tapHideTimeoutTopRef.current) window.clearTimeout(tapHideTimeoutTopRef.current);
+	      tapHideTimeoutTopRef.current = window.setTimeout(() => {
+	        tapHideTimeoutTopRef.current = null;
+	        if (headerEngagedRef.current) return;
+	        setIsTopHotspotActive(false);
+	      }, tapHoldMs);
+	    };
+
+	    const scheduleHideBottom = () => {
+	      if (tapHideTimeoutBottomRef.current) window.clearTimeout(tapHideTimeoutBottomRef.current);
+	      tapHideTimeoutBottomRef.current = window.setTimeout(() => {
+	        tapHideTimeoutBottomRef.current = null;
+	        if (footerEngagedRef.current) return;
+	        if (themeEngagedRef.current) return;
+	        setIsBottomHotspotActive(false);
+	      }, tapHoldMs);
+	    };
+
+	    const handleTouchEnd = () => {
+	      const start = touchStartRef.current;
+	      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+	      touchStartRef.current = null;
+
+	      // If we were scrolling very recently, ignore tap reveal to avoid "regen".
+	      if (now < suppressRevealUntilRef.current) {
+	        touchMovedRef.current = false;
+	        return;
+	      }
+
+	      if (!start) {
+	        touchMovedRef.current = false;
+	        return;
+	      }
+
+	      if (touchMovedRef.current) {
+	        // Treat as scroll/drag gesture.
+	        touchMovedRef.current = false;
+	        return;
+	      }
+
+	      const withinTop = start.y <= TOP_HOTSPOT_PX;
+	      const withinBottom = start.y >= window.innerHeight - BOTTOM_HOTSPOT_PX;
+
+	      clearHotspotTimers();
+	      clearTapTimers();
+
+	      // Tap behavior:
+	      // - near top: header only
+	      // - near bottom: footer only
+	      // - middle: show both (more forgiving on mobile)
+	      if (withinTop) {
+	        pointerInTopHotspotRef.current = true;
+	        setIsTopHotspotActive(true);
+	        scheduleHideTop();
+	      } else {
+	        pointerInTopHotspotRef.current = false;
+	      }
+
+	      if (withinBottom) {
+	        pointerInBottomHotspotRef.current = true;
+	        setIsBottomHotspotActive(true);
+	        scheduleHideBottom();
+	      } else {
+	        pointerInBottomHotspotRef.current = false;
+	      }
+
+	      if (!withinTop && !withinBottom) {
+	        pointerInTopHotspotRef.current = true;
+	        pointerInBottomHotspotRef.current = true;
+	        setIsTopHotspotActive(true);
+	        setIsBottomHotspotActive(true);
+	        scheduleHideTop();
+	        scheduleHideBottom();
+	      }
+
+	      touchMovedRef.current = false;
+	    };
 
     const handleMouseLeave = () => {
       clearHotspotTimers();
@@ -685,27 +791,30 @@ export default function App() {
       setIsBottomHotspotActive(false);
     };
 
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('touchstart', handleTouchStart);
-    window.addEventListener('touchend', handleTouchEnd);
-    window.addEventListener('touchcancel', handleTouchEnd);
-    window.addEventListener('mouseleave', handleMouseLeave);
+	    window.addEventListener('scroll', handleScroll, true);
+	    window.addEventListener('pointermove', handlePointerMove);
+	    window.addEventListener('touchstart', handleTouchStart);
+	    window.addEventListener('touchmove', handleTouchMove);
+	    window.addEventListener('touchend', handleTouchEnd);
+	    window.addEventListener('touchcancel', handleTouchEnd);
+	    window.addEventListener('mouseleave', handleMouseLeave);
 
     return () => {
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('touchcancel', handleTouchEnd);
-      window.removeEventListener('mouseleave', handleMouseLeave);
-      clearHotspotTimers();
-      if (bionicScrollIdleTimeoutRef.current) {
-        window.clearTimeout(bionicScrollIdleTimeoutRef.current);
-        bionicScrollIdleTimeoutRef.current = null;
-      }
-    };
-  }, [activeBook?.id, mode]);
+	      window.removeEventListener('scroll', handleScroll, true);
+	      window.removeEventListener('pointermove', handlePointerMove);
+	      window.removeEventListener('touchstart', handleTouchStart);
+	      window.removeEventListener('touchmove', handleTouchMove);
+	      window.removeEventListener('touchend', handleTouchEnd);
+	      window.removeEventListener('touchcancel', handleTouchEnd);
+	      window.removeEventListener('mouseleave', handleMouseLeave);
+	      clearTapTimers();
+	      clearHotspotTimers();
+	      if (bionicScrollIdleTimeoutRef.current) {
+	        window.clearTimeout(bionicScrollIdleTimeoutRef.current);
+	        bionicScrollIdleTimeoutRef.current = null;
+	      }
+	    };
+	  }, [activeBook?.id, mode]);
 
   useEffect(() => {
     if (mode !== 'bionic_flow') {
@@ -896,11 +1005,11 @@ export default function App() {
 
         {/* Library List */}
         <div className="flex-1 overflow-y-auto px-4 py-2 scrollbar-thin scrollbar-thumb-text-primary/10 scrollbar-track-transparent">
-	           <div className="px-2 mt-2">
-	             <div className="flex items-center justify-between gap-2">
-	               <h2 className="text-xs font-bold uppercase tracking-widest text-text-secondary opacity-50 whitespace-nowrap">Your Library</h2>
-	               <LibrarySortMenu value={librarySort} onChange={setLibrarySort} />
-	             </div>
+		           <div className="px-2 mt-2 mb-3">
+		             <div className="flex items-center justify-between gap-2">
+		               <h2 className="text-xs font-bold uppercase tracking-widest text-text-secondary opacity-50 whitespace-nowrap">Your Library</h2>
+		               <LibrarySortMenu value={librarySort} onChange={setLibrarySort} />
+		             </div>
 
              <input
                value={libraryQuery}
@@ -1071,11 +1180,13 @@ export default function App() {
 	              </div>
 
               {/* Reader Area */}
-              <div className="flex-1 w-full min-h-0 relative z-10">
-                <div
-                  key={mode}
-                  className={`h-full w-full animate-in fade-in duration-500 ${mode === 'bionic_flow' ? '' : 'flex items-center justify-center'}`}
-                >
+	              <div className="flex-1 w-full min-h-0 relative z-10">
+	                <div
+	                  key={mode}
+		                  className={`h-full w-full animate-in fade-in duration-500 ${mode === 'bionic_flow' ? '' : 'flex items-center justify-center'} ${
+		                    mode === 'rsvp' || mode === 'rsvp_enhanced' ? 'lg:-translate-y-14 xl:-translate-y-16' : ''
+		                  }`}
+		                >
                   {mode === 'bionic_flow' ? (
                     <BionicFlowReader
                       text={activeBook.text}
@@ -1136,21 +1247,23 @@ export default function App() {
                           onStrengthChange={handleBionicStrengthChange}
                           onLineWidthChange={handleLineWidthChange}
                         />
-                      ) : (
-                        <ControlCenter
-                          isPlaying={rsvp.isPlaying}
-                          onToggle={rsvp.togglePlay}
-                          wpm={rsvp.wpm}
-                          setWpm={rsvp.setWpm}
-                          progress={rsvp.index}
-                          total={rsvp.totalWords}
-                          onSeek={rsvp.seek}
-                          smartTimingEnabled={readerSettings.smartTimingEnabled ?? true}
-                          comfortModeEnabled={readerSettings.comfortModeEnabled ?? true}
-                          onSmartTimingChange={handleSmartTimingChange}
-                          onComfortModeChange={handleComfortModeChange}
-                        />
-                      )}
+	                      ) : (
+	                        <ControlCenter
+	                          isPlaying={rsvp.isPlaying}
+	                          onToggle={rsvp.togglePlay}
+	                          wpm={rsvp.wpm}
+	                          setWpm={rsvp.setWpm}
+	                          progress={rsvp.index}
+	                          total={rsvp.totalWords}
+	                          onSeek={rsvp.seek}
+	                          contextStrength={controlsPrevMode === 'rsvp_enhanced' ? contextStrength : undefined}
+	                          onContextStrengthChange={controlsPrevMode === 'rsvp_enhanced' ? handleContextStrengthChange : undefined}
+	                          smartTimingEnabled={readerSettings.smartTimingEnabled ?? true}
+	                          comfortModeEnabled={readerSettings.comfortModeEnabled ?? true}
+	                          onSmartTimingChange={handleSmartTimingChange}
+	                          onComfortModeChange={handleComfortModeChange}
+	                        />
+	                      )}
                     </div>
                   )}
                   <div
@@ -1168,21 +1281,23 @@ export default function App() {
                         onStrengthChange={handleBionicStrengthChange}
                         onLineWidthChange={handleLineWidthChange}
                       />
-                    ) : (
-                      <ControlCenter
-                        isPlaying={rsvp.isPlaying}
-                        onToggle={rsvp.togglePlay}
-                        wpm={rsvp.wpm}
-                        setWpm={rsvp.setWpm}
-                        progress={rsvp.index}
-                        total={rsvp.totalWords}
-                        onSeek={rsvp.seek}
-                        smartTimingEnabled={readerSettings.smartTimingEnabled ?? true}
-                        comfortModeEnabled={readerSettings.comfortModeEnabled ?? true}
-                        onSmartTimingChange={handleSmartTimingChange}
-                        onComfortModeChange={handleComfortModeChange}
-                      />
-                    )}
+	                    ) : (
+	                      <ControlCenter
+	                        isPlaying={rsvp.isPlaying}
+	                        onToggle={rsvp.togglePlay}
+	                        wpm={rsvp.wpm}
+	                        setWpm={rsvp.setWpm}
+	                        progress={rsvp.index}
+	                        total={rsvp.totalWords}
+	                        onSeek={rsvp.seek}
+	                        contextStrength={mode === 'rsvp_enhanced' ? contextStrength : undefined}
+	                        onContextStrengthChange={mode === 'rsvp_enhanced' ? handleContextStrengthChange : undefined}
+	                        smartTimingEnabled={readerSettings.smartTimingEnabled ?? true}
+	                        comfortModeEnabled={readerSettings.comfortModeEnabled ?? true}
+	                        onSmartTimingChange={handleSmartTimingChange}
+	                        onComfortModeChange={handleComfortModeChange}
+	                      />
+	                    )}
                   </div>
                 </div>
               </div>

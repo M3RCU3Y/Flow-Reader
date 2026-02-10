@@ -76,7 +76,7 @@ const getTypographyClass = (lineWidth: LineWidth) => {
   return 'text-lg leading-relaxed';
 };
 
-export const BionicFlowReader: React.FC<BionicFlowReaderProps> = ({
+const BionicFlowReaderImpl: React.FC<BionicFlowReaderProps> = ({
   text,
   currentIndex,
   totalWords,
@@ -90,9 +90,18 @@ export const BionicFlowReader: React.FC<BionicFlowReaderProps> = ({
   const paragraphRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const [paragraphMeta, setParagraphMeta] = useState<ParagraphMeta[]>([]);
   const rafRef = useRef<number | null>(null);
-  const lastIndexRef = useRef(currentIndex);
+  const lastComputedIndexRef = useRef(currentIndex);
+  const lastEmittedIndexRef = useRef(currentIndex);
+  const lastEmitAtRef = useRef(0);
+  const pendingEmitIndexRef = useRef<number | null>(null);
+  const pendingEmitTimerRef = useRef<number | null>(null);
+  const lastEmittedPercentRef = useRef<number | null>(null);
+  const lastPercentEmitAtRef = useRef(0);
+  const pendingEmitPercentRef = useRef<number | null>(null);
+  const pendingPercentTimerRef = useRef<number | null>(null);
   const suppressPersistRef = useRef(false);
   const hasAutoScrolledRef = useRef(false);
+  const strengthMeasureTimeoutRef = useRef<number | null>(null);
 
   const paragraphs = useMemo(() => {
     return text
@@ -149,14 +158,45 @@ export const BionicFlowReader: React.FC<BionicFlowReaderProps> = ({
   useEffect(() => {
     const frame = window.requestAnimationFrame(measureParagraphs);
     return () => window.cancelAnimationFrame(frame);
-  }, [measureParagraphs, lineWidth, bionicStrength, text]);
+  }, [measureParagraphs, lineWidth, text]);
 
   useEffect(() => {
-    lastIndexRef.current = currentIndex;
-  }, [currentIndex]);
+    if (strengthMeasureTimeoutRef.current) {
+      window.clearTimeout(strengthMeasureTimeoutRef.current);
+      strengthMeasureTimeoutRef.current = null;
+    }
+    // Bionic strength changes can subtly reflow line-wrapping (due to font weight changes).
+    // Debounce measurement so dragging feels smooth.
+    strengthMeasureTimeoutRef.current = window.setTimeout(() => {
+      measureParagraphs();
+      strengthMeasureTimeoutRef.current = null;
+    }, 250);
+    return () => {
+      if (strengthMeasureTimeoutRef.current) {
+        window.clearTimeout(strengthMeasureTimeoutRef.current);
+        strengthMeasureTimeoutRef.current = null;
+      }
+    };
+  }, [bionicStrength, measureParagraphs]);
 
   useEffect(() => {
     hasAutoScrolledRef.current = false;
+    // Reset scroll progress refs when text changes.
+    lastComputedIndexRef.current = clamp(currentIndex, 0, Math.max(0, totalWords - 1));
+    lastEmittedIndexRef.current = lastComputedIndexRef.current;
+    lastEmitAtRef.current = 0;
+    pendingEmitIndexRef.current = null;
+    if (pendingEmitTimerRef.current) {
+      window.clearTimeout(pendingEmitTimerRef.current);
+      pendingEmitTimerRef.current = null;
+    }
+    lastEmittedPercentRef.current = null;
+    lastPercentEmitAtRef.current = 0;
+    pendingEmitPercentRef.current = null;
+    if (pendingPercentTimerRef.current) {
+      window.clearTimeout(pendingPercentTimerRef.current);
+      pendingPercentTimerRef.current = null;
+    }
   }, [text]);
 
   const scrollToTop = useCallback((top: number) => {
@@ -221,14 +261,68 @@ export const BionicFlowReader: React.FC<BionicFlowReaderProps> = ({
       totalWords - 1
     );
 
-    if (nextIndex !== lastIndexRef.current) {
-      lastIndexRef.current = nextIndex;
-      onProgressIndex(nextIndex);
+    lastComputedIndexRef.current = nextIndex;
+
+    // Throttle progress emissions so scrolling doesn't hammer the parent state tree.
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const emitIndex = (idx: number) => {
+      lastEmittedIndexRef.current = idx;
+      lastEmitAtRef.current = now;
+      pendingEmitIndexRef.current = null;
+      onProgressIndex(idx);
+    };
+
+    const distance = Math.abs(nextIndex - lastEmittedIndexRef.current);
+    const timeSince = now - lastEmitAtRef.current;
+    if (distance >= 2 && timeSince >= 120) {
+      emitIndex(nextIndex);
+    } else {
+      pendingEmitIndexRef.current = nextIndex;
+      if (pendingEmitTimerRef.current === null) {
+        pendingEmitTimerRef.current = window.setTimeout(() => {
+          pendingEmitTimerRef.current = null;
+          const pending = pendingEmitIndexRef.current;
+          if (pending === null) return;
+          // Emit a trailing update so the index settles correctly after scrolling stops.
+          if (pending !== lastEmittedIndexRef.current) {
+            onProgressIndex(pending);
+            lastEmittedIndexRef.current = pending;
+          }
+          pendingEmitIndexRef.current = null;
+        }, 140);
+      }
     }
 
     if (onScrollPercentChange && !suppressPersistRef.current) {
       const maxScroll = Math.max(1, container.scrollHeight - container.clientHeight);
-      onScrollPercentChange(clamp(container.scrollTop / maxScroll, 0, 1));
+      const pct = clamp(container.scrollTop / maxScroll, 0, 1);
+      const lastPct = lastEmittedPercentRef.current;
+      const pctNow = now;
+      const pctTimeSince = pctNow - lastPercentEmitAtRef.current;
+      const pctDistance = lastPct === null ? 1 : Math.abs(pct - lastPct);
+
+      const emitPct = (value: number) => {
+        lastEmittedPercentRef.current = value;
+        lastPercentEmitAtRef.current = pctNow;
+        pendingEmitPercentRef.current = null;
+        onScrollPercentChange(value);
+      };
+
+      if (pctDistance >= 0.002 && pctTimeSince >= 120) {
+        emitPct(pct);
+      } else {
+        pendingEmitPercentRef.current = pct;
+        if (pendingPercentTimerRef.current === null) {
+          pendingPercentTimerRef.current = window.setTimeout(() => {
+            pendingPercentTimerRef.current = null;
+            const pending = pendingEmitPercentRef.current;
+            if (pending === null) return;
+            onScrollPercentChange(pending);
+            lastEmittedPercentRef.current = pending;
+            pendingEmitPercentRef.current = null;
+          }, 180);
+        }
+      }
     }
   }, [paragraphMeta, totalWords, onProgressIndex, onScrollPercentChange]);
 
@@ -245,12 +339,65 @@ export const BionicFlowReader: React.FC<BionicFlowReaderProps> = ({
       if (rafRef.current !== null) {
         window.cancelAnimationFrame(rafRef.current);
       }
+      if (pendingEmitTimerRef.current !== null) {
+        window.clearTimeout(pendingEmitTimerRef.current);
+        pendingEmitTimerRef.current = null;
+      }
+      if (pendingPercentTimerRef.current !== null) {
+        window.clearTimeout(pendingPercentTimerRef.current);
+        pendingPercentTimerRef.current = null;
+      }
+      if (strengthMeasureTimeoutRef.current !== null) {
+        window.clearTimeout(strengthMeasureTimeoutRef.current);
+        strengthMeasureTimeoutRef.current = null;
+      }
     };
   }, []);
 
   const strength = clamp(bionicStrength, 0, 0.8);
   const widthClass = getWidthClass(lineWidth);
   const typographyClass = getTypographyClass(lineWidth);
+
+  const renderedParagraphs = useMemo(() => {
+    const paragraphStyle: React.CSSProperties = {
+      // Isolate paragraphs to reduce layout/paint scope without affecting measurements.
+      ...( { contain: 'content' } as any),
+    };
+
+    return paragraphs.map((paragraph, index) => {
+      const tokens = paragraphTokens[index] || [];
+      return (
+        <p
+          key={`${index}-${paragraph.slice(0, 24)}`}
+          ref={(el) => {
+            paragraphRefs.current[index] = el;
+          }}
+          className="mb-8 whitespace-pre-wrap"
+          style={paragraphStyle}
+        >
+          {tokens.map((token, tokenIndex) => {
+            if (token.type !== 'word') {
+              return token.value;
+            }
+            const { bold, rest } = splitBionic(token.value, strength);
+            if (!bold) {
+              return (
+                <span key={`${index}-${tokenIndex}`} className="text-text-primary/80">
+                  {rest}
+                </span>
+              );
+            }
+            return (
+              <React.Fragment key={`${index}-${tokenIndex}`}>
+                <span className="font-semibold text-bionic-highlight/80">{bold}</span>
+                <span className="text-text-primary/80">{rest}</span>
+              </React.Fragment>
+            );
+          })}
+        </p>
+      );
+    });
+  }, [paragraphTokens, paragraphs, strength]);
 
   return (
     <div className="h-full w-full min-h-0 overflow-hidden">
@@ -260,42 +407,28 @@ export const BionicFlowReader: React.FC<BionicFlowReaderProps> = ({
         className="h-full w-full min-h-0 overflow-y-auto px-8 pb-8 pt-24 sm:pt-28 lg:pt-32 scrollbar-thin scrollbar-thumb-text-primary/10 scrollbar-track-transparent"
       >
         <div className={`mx-auto w-full ${widthClass} font-header ${typographyClass} text-text-primary/70`}>
-          {paragraphs.map((paragraph, index) => {
-            const tokens = paragraphTokens[index] || [];
-            return (
-              <p
-                key={`${index}-${paragraph.slice(0, 24)}`}
-                ref={(el) => {
-                  paragraphRefs.current[index] = el;
-                }}
-                className="mb-8 whitespace-pre-wrap"
-              >
-                {tokens.map((token, tokenIndex) => {
-                  if (token.type !== 'word') {
-                    return (
-                      <span key={`${index}-${tokenIndex}`}>{token.value}</span>
-                    );
-                  }
-                  const { bold, rest } = splitBionic(token.value, strength);
-                  if (!bold) {
-                    return (
-                      <span key={`${index}-${tokenIndex}`} className="text-text-primary/80">
-                        {rest}
-                      </span>
-                    );
-                  }
-                  return (
-                    <span key={`${index}-${tokenIndex}`}>
-                      <span className="font-semibold text-bionic-highlight/80">{bold}</span>
-                      <span className="text-text-primary/80">{rest}</span>
-                    </span>
-                  );
-                })}
-              </p>
-            );
-          })}
+          {renderedParagraphs}
         </div>
       </div>
     </div>
   );
 };
+
+// Memoize to avoid re-rendering the giant text tree for tiny progress changes.
+// We allow large index jumps (e.g. bookmark jumps) to re-render.
+export const BionicFlowReader = React.memo(BionicFlowReaderImpl, (prev, next) => {
+  if (prev.text !== next.text) return false;
+  if (prev.totalWords !== next.totalWords) return false;
+  if (prev.bionicStrength !== next.bionicStrength) return false;
+  if (prev.lineWidth !== next.lineWidth) return false;
+  if (prev.onProgressIndex !== next.onProgressIndex) return false;
+  if (prev.onScrollPercentChange !== next.onScrollPercentChange) return false;
+
+  // Ignore small index changes (typically caused by scroll progress updates).
+  // Still re-render for larger jumps so external seeks can take effect.
+  const jump = Math.abs((prev.currentIndex ?? 0) - (next.currentIndex ?? 0));
+  if (jump >= 25) return false;
+  return true;
+});
+
+BionicFlowReader.displayName = 'BionicFlowReader';

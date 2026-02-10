@@ -1,5 +1,12 @@
 import React from 'react';
 import { Play, Pause } from 'lucide-react';
+import type { ContextStrength } from '../types';
+
+const CONTEXT_STRENGTHS: Array<{ value: ContextStrength; label: string }> = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Med' },
+  { value: 'high', label: 'High' },
+];
 
 interface ControlCenterProps {
   isPlaying: boolean;
@@ -9,6 +16,8 @@ interface ControlCenterProps {
   progress: number;
   total: number;
   onSeek: (index: number) => void;
+  contextStrength?: ContextStrength;
+  onContextStrengthChange?: (strength: ContextStrength) => void;
   smartTimingEnabled?: boolean;
   comfortModeEnabled?: boolean;
   onSmartTimingChange?: (enabled: boolean) => void;
@@ -23,11 +32,13 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
   progress,
   total,
   onSeek,
+  contextStrength,
+  onContextStrengthChange,
   smartTimingEnabled,
   comfortModeEnabled,
   onSmartTimingChange,
   onComfortModeChange
-	}) => {
+		}) => {
 	  const [toast, setToast] = React.useState<{ id: number; text: string } | null>(null);
 
 	  const showToast = React.useCallback((text: string) => {
@@ -64,7 +75,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
         />
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+	      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         
         {/* Play Controls */}
         <div className="flex items-center gap-4">
@@ -100,58 +111,86 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
 
       </div>
 
-	      {(typeof smartTimingEnabled === 'boolean' || typeof comfortModeEnabled === 'boolean') && (
-	        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
-	          <div className="flex items-center gap-2">
-	            {typeof smartTimingEnabled === 'boolean' && (
-	              <button
-	                type="button"
-	                role="switch"
-	                aria-checked={smartTimingEnabled}
-	                onClick={() => {
-	                  const next = !smartTimingEnabled;
-	                  onSmartTimingChange?.(next);
-	                  if (next) showToast('Smart timing on: pauses for punctuation and paragraphs.');
-	                }}
-	                className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:border-accent-red/60 focus-visible:shadow-glow ${
-	                  smartTimingEnabled
-	                    ? 'bg-accent-red/15 border-accent-red/30 text-text-primary shadow-glow'
-	                    : 'bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/20'
-	                }`}
-	              >
-	                <span
-	                  aria-hidden="true"
-	                  className={`w-3.5 h-3.5 rounded-full border transition-colors ${
-	                    smartTimingEnabled ? 'bg-accent-red border-accent-red' : 'bg-transparent border-text-primary/20'
+	      {(typeof smartTimingEnabled === 'boolean' ||
+	        typeof comfortModeEnabled === 'boolean' ||
+	        (typeof contextStrength === 'string' && typeof onContextStrengthChange === 'function')) && (
+	        <div className="mt-4 text-xs">
+	          <div className="flex flex-wrap items-center gap-2">
+	            <div className="flex flex-wrap items-center gap-2">
+	              {typeof smartTimingEnabled === 'boolean' && (
+	                <button
+	                  type="button"
+	                  role="switch"
+	                  aria-checked={smartTimingEnabled}
+	                  onClick={() => {
+	                    const next = !smartTimingEnabled;
+	                    onSmartTimingChange?.(next);
+	                    if (next) showToast('Smart timing on: pauses for punctuation and paragraphs.');
+	                  }}
+	                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:border-accent-red/60 focus-visible:shadow-glow ${
+	                    smartTimingEnabled
+	                      ? 'bg-accent-red/15 border-accent-red/30 text-text-primary shadow-glow'
+	                      : 'bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/20'
 	                  }`}
-	                />
-	                Smart timing
-	              </button>
-	            )}
-	            {typeof comfortModeEnabled === 'boolean' && (
-	              <button
-	                type="button"
-	                role="switch"
-	                aria-checked={comfortModeEnabled}
-	                onClick={() => {
-	                  const next = !comfortModeEnabled;
-	                  onComfortModeChange?.(next);
-	                  if (next) showToast('Comfort mode on: ramps up smoothly and eases after rewinds.');
-	                }}
-	                className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:border-accent-red/60 focus-visible:shadow-glow ${
-	                  comfortModeEnabled
-	                    ? 'bg-accent-red/15 border-accent-red/30 text-text-primary shadow-glow'
-	                    : 'bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/20'
-	                }`}
-	              >
-	                <span
-	                  aria-hidden="true"
-	                  className={`w-3.5 h-3.5 rounded-full border transition-colors ${
-	                    comfortModeEnabled ? 'bg-accent-red border-accent-red' : 'bg-transparent border-text-primary/20'
+	                >
+	                  <span
+	                    aria-hidden="true"
+	                    className={`w-3.5 h-3.5 rounded-full border transition-colors ${
+	                      smartTimingEnabled ? 'bg-accent-red border-accent-red' : 'bg-transparent border-text-primary/20'
+	                    }`}
+	                  />
+	                  Smart timing
+	                </button>
+	              )}
+	              {typeof comfortModeEnabled === 'boolean' && (
+	                <button
+	                  type="button"
+	                  role="switch"
+	                  aria-checked={comfortModeEnabled}
+	                  onClick={() => {
+	                    const next = !comfortModeEnabled;
+	                    onComfortModeChange?.(next);
+	                    if (next) showToast('Comfort mode on: ramps up smoothly and eases after rewinds.');
+	                  }}
+	                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:border-accent-red/60 focus-visible:shadow-glow ${
+	                    comfortModeEnabled
+	                      ? 'bg-accent-red/15 border-accent-red/30 text-text-primary shadow-glow'
+	                      : 'bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/20'
 	                  }`}
-	                />
-	                Comfort mode
-	              </button>
+	                >
+	                  <span
+	                    aria-hidden="true"
+	                    className={`w-3.5 h-3.5 rounded-full border transition-colors ${
+	                      comfortModeEnabled ? 'bg-accent-red border-accent-red' : 'bg-transparent border-text-primary/20'
+	                    }`}
+	                  />
+	                  Comfort mode
+	                </button>
+	              )}
+	            </div>
+
+	            {typeof contextStrength === 'string' && typeof onContextStrengthChange === 'function' && (
+	              <div className="ml-auto flex items-center">
+	                <div className="flex items-center gap-3 rounded-full border border-text-primary/10 bg-panel-bg/40 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-text-secondary shadow-xl backdrop-blur-md">
+	                  <span className="font-semibold">Context</span>
+	                  <div className="flex items-center gap-1 rounded-full bg-text-primary/5 p-1">
+	                    {CONTEXT_STRENGTHS.map((item) => (
+	                      <button
+	                        key={item.value}
+	                        type="button"
+	                        onClick={() => onContextStrengthChange(item.value)}
+	                        className={`px-3 py-1 rounded-full text-[10px] font-semibold transition-colors ${
+	                          contextStrength === item.value
+	                            ? 'bg-accent-red/15 text-text-primary border border-accent-red/30 shadow-glow'
+	                            : 'text-text-secondary hover:text-text-primary'
+	                        }`}
+	                      >
+	                        {item.label}
+	                      </button>
+	                    ))}
+	                  </div>
+	                </div>
+	              </div>
 	            )}
 	          </div>
 	        </div>

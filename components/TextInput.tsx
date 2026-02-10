@@ -291,7 +291,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     <div className="w-full animate-in fade-in zoom-in-95 duration-500">
       
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-header font-bold text-text-primary mb-2">Read faster, retain more.</h2>
+        <h2 className="text-3xl font-header font-bold text-text-primary mb-2">
+          Read <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">faster</span>,
+          retain <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">more</span>.
+        </h2>
         <p className="text-text-secondary">Paste your text below or upload a document to begin.</p>
         <p className="text-xs text-text-secondary/70 mt-3">
           Your library and preferences stay on this device (local browser storage).
@@ -324,7 +327,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Paste text here..."
-          className="w-full h-64 bg-transparent border-2 border-dashed border-text-secondary/25 rounded-xl p-6 text-lg text-text-primary placeholder:text-text-primary/30 focus:border-accent-red/60 focus:outline-none focus:bg-transparent focus:ring-0 focus:ring-offset-0 transition-colors duration-200 focus:shadow-glow resize-none font-ui"
+          className="w-full h-64 bg-transparent border-2 border-dashed border-text-secondary/25 rounded-xl p-6 text-lg text-text-primary placeholder:text-text-primary/30 caret-accent-red focus:border-accent-red/60 focus:outline-none focus:bg-transparent focus:ring-0 focus:ring-offset-0 transition-colors duration-200 focus:shadow-glow resize-none font-ui"
         />
         
         {/* Actions Bar inside */}
