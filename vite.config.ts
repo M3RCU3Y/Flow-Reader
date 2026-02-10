@@ -5,7 +5,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    // GitHub Pages hosts under /<repo>/, so production builds need a base path.
+    // Keep dev as '/' so `npm run dev` works normally.
+    const base = mode === 'production' ? '/Focus-Reader/' : '/';
     return {
+      base,
       server: {
         port: 3000,
         host: '0.0.0.0',
@@ -24,12 +28,13 @@ export default defineConfig(({ mode }) => {
             display: 'standalone',
             icons: [
               {
-                src: '/pwa-icon.svg',
+                // No leading slash so this works under a GitHub Pages base path.
+                src: 'pwa-icon.svg',
                 sizes: '512x512',
                 type: 'image/svg+xml',
               },
               {
-                src: '/pwa-maskable.svg',
+                src: 'pwa-maskable.svg',
                 sizes: '512x512',
                 type: 'image/svg+xml',
                 purpose: 'maskable',
@@ -77,8 +82,9 @@ export default defineConfig(({ mode }) => {
         }),
       ],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        // Avoid `undefined` leaking into the define step in CI.
+        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY ?? ''),
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY ?? '')
       },
       resolve: {
         alias: {
