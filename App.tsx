@@ -1054,8 +1054,17 @@ export default function App() {
            </button>
         )}
 
-        {/* Content Area */}
-        <div className="flex-1 w-full h-full min-h-0 flex flex-col items-center justify-center relative">
+	        {/* Content Area */}
+	        <div
+            className={`flex-1 w-full h-full min-h-0 flex flex-col items-center relative ${
+              !activeBook ? 'overflow-y-auto justify-start sm:justify-center py-8 sm:py-0' : 'justify-center'
+            }`}
+            style={
+              !activeBook
+                ? { paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }
+                : undefined
+            }
+          >
           
 	          {!activeBook ? (
 	            // STATE A: Idle / Input

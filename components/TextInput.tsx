@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Upload, Loader2, ArrowRight, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Upload, Loader2, ArrowRight, X, Maximize2 } from 'lucide-react';
 import { extractTextFromPDF } from '../services/pdfService';
 import type { ExtractPdfProgressInfo, PdfExtractStage, ProcessingStatus } from '../types';
 
@@ -15,6 +15,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [isFullscreenEditorOpen, setIsFullscreenEditorOpen] = useState(false);
 
   const [progressStage, setProgressStage] = useState<PdfExtractStage | null>(null);
   const [progressPage, setProgressPage] = useState(0);
@@ -26,6 +27,15 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   const [passwordDraft, setPasswordDraft] = useState('');
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
   const [urlDraft, setUrlDraft] = useState('');
+
+  useEffect(() => {
+    if (!isFullscreenEditorOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isFullscreenEditorOpen]);
 
   const progressPercent = useMemo(() => {
     if (!progressTotal || progressTotal <= 0) return 0;
@@ -56,6 +66,8 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     }
     onStartReading(finalTitle, text);
   };
+
+  const triggerFilePicker = () => fileInputRef.current?.click();
 
   const loadDemo = () => {
     const demoTitle = 'Demo: Focus Reader';
@@ -323,17 +335,31 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
             </div>
           </div>
         )}
+        <button
+          type="button"
+          onClick={() => setIsFullscreenEditorOpen(true)}
+          disabled={status === 'processing'}
+          className="absolute top-4 right-4 z-20 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-panel-bg/80 border border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/25 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          aria-label="Open fullscreen editor"
+          title="Fullscreen editor"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Paste text here..."
-          className="w-full h-64 bg-transparent border-2 border-dashed border-text-secondary/25 rounded-xl p-6 text-lg text-text-primary placeholder:text-text-primary/30 caret-accent-red focus:border-accent-red/60 focus:outline-none focus:bg-transparent focus:ring-0 focus:ring-offset-0 transition-colors duration-200 focus:shadow-glow resize-none font-ui"
+          className="w-full h-64 bg-transparent border-2 border-dashed border-text-secondary/25 rounded-xl p-6 pb-24 sm:pb-6 text-lg text-text-primary placeholder:text-text-primary/30 caret-accent-red focus:border-accent-red/60 focus:outline-none focus:bg-transparent focus:ring-0 focus:ring-offset-0 transition-colors duration-200 focus:shadow-glow resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
+          style={{ WebkitOverflowScrolling: 'touch' }}
         />
         
         {/* Actions Bar inside */}
-        <div className="absolute bottom-4 right-4 flex gap-2">
+        <div
+          className="absolute right-4 flex gap-2"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
+        >
            <button
-             onClick={() => fileInputRef.current?.click()}
+             onClick={triggerFilePicker}
              className="flex items-center gap-2 px-4 py-2 bg-panel-bg border border-text-primary/10 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-all font-medium"
              disabled={status === 'processing'}
            >
@@ -403,6 +429,79 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       <p className="mt-2 text-center text-xs text-text-secondary/60">
         URL import uses a public text extraction proxy for compatibility with most sites.
       </p>
+
+      {isFullscreenEditorOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-app-bg">
+          <div
+            className="flex items-center justify-between px-4 py-3 border-b border-text-primary/10"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}
+          >
+            <div className="text-sm font-semibold text-text-primary">Edit text</div>
+            <button
+              type="button"
+              onClick={() => setIsFullscreenEditorOpen(false)}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-panel-bg/60 border border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/25 transition-colors"
+              aria-label="Close fullscreen editor"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex-1 min-h-0 px-4 py-4">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Paste text here..."
+              autoFocus
+              className="w-full h-full min-h-0 rounded-xl border border-text-primary/10 bg-black/10 p-4 pb-28 text-base sm:text-lg text-text-primary placeholder:text-text-secondary/60 caret-accent-red focus:border-accent-red/60 focus:outline-none resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            />
+          </div>
+
+          <div
+            className="shrink-0 px-4 pt-3 border-t border-text-primary/10 bg-app-bg"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
+          >
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={triggerFilePicker}
+                className="flex items-center gap-2 px-4 py-2 bg-panel-bg border border-text-primary/10 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-all font-medium"
+                disabled={status === 'processing'}
+              >
+                {status === 'processing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {status === 'processing'
+                  ? `${stageLabel || 'Processing'}${progressTotal > 0 ? ` (${progressPage}/${progressTotal})` : '…'}`
+                  : 'Upload file'}
+              </button>
+
+              {status === 'processing' && (
+                <button
+                  type="button"
+                  onClick={cancelImport}
+                  className="flex items-center gap-2 px-4 py-2 bg-panel-bg border border-text-primary/10 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-all font-medium"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </button>
+              )}
+
+              {text.trim() && (
+                <button
+                  onClick={() => {
+                    if (!text.trim()) return;
+                    handleStart();
+                    setIsFullscreenEditorOpen(false);
+                  }}
+                  className="flex items-center gap-2 px-6 py-2 bg-accent-red text-white rounded-lg text-sm font-bold shadow-glow hover:bg-accent-red/90 transition-all"
+                >
+                  Start Reading <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {passwordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
