@@ -7,6 +7,8 @@ const DEFAULT_PREFS: ReaderPreferences = {
   contextStrength: 'medium',
   bionicStrength: 0.4,
   lineWidth: 'normal',
+  smartTimingEnabled: true,
+  comfortModeEnabled: true,
 };
 
 export const getReaderPreferences = (): ReaderPreferences => {
@@ -20,6 +22,11 @@ export const getReaderPreferences = (): ReaderPreferences => {
     };
   } catch (e) {
     console.error('Failed to parse reader preferences', e);
+    try {
+      localStorage.removeItem(PREFS_KEY);
+    } catch {
+      // ignore
+    }
     return { ...DEFAULT_PREFS };
   }
 };

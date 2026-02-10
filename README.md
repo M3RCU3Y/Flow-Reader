@@ -1,20 +1,28 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Focus Reader
 
-# Run and deploy your AI Studio app
+Focus Reader is a local-first speed reading app with:
+- RSVP (word-by-word)
+- RSVP+ (context-enhanced, desktop/landscape)
+- Bionic Flow (scrollable reading with a “zen” UI reveal)
+- Theme Studio (presets + custom themes)
+- PDF import that extracts text reliably, with OCR fallback for scanned PDFs
+- DOCX import
+- URL import for articles (uses a public text extraction proxy to avoid CORS issues)
 
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/drive/1LYvPpUqQqo97pNai_SSDJS8GsKGPkmBk
+Everything is stored locally in your browser (no accounts, no sync).
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+Prerequisites: Node.js
 
+```bash
+npm install
+npm run dev
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Open the local URL printed by Vite (usually `http://localhost:3001`).
+
+## Notes
+- The library, preferences, and themes use local browser storage.
+- “Clear Data” removes Focus Reader data from this device.
+- The app is PWA-enabled (installable). Offline works best after the first load (assets are cached).

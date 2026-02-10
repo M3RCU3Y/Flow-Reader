@@ -31,6 +31,8 @@ export interface ReaderPreferences {
   contextStrength: ContextStrength;
   bionicStrength: number;
   lineWidth: LineWidth;
+  smartTimingEnabled?: boolean;
+  comfortModeEnabled?: boolean;
 }
 
 export interface BookSettings {
@@ -39,6 +41,14 @@ export interface BookSettings {
   bionicStrength?: number;
   lineWidth?: LineWidth;
   bionicScrollPercent?: number;
+  bookmarks?: Bookmark[];
+}
+
+export interface Bookmark {
+  id: string;
+  index: number;
+  note?: string;
+  createdAt: number;
 }
 
 export interface ThemeTokens {
@@ -59,10 +69,30 @@ export interface ThemeDefinition {
   isPreset?: boolean;
 }
 
+export type PdfExtractStage = 'loading' | 'extracting' | 'ocr' | 'cleaning';
+
+export interface ExtractPdfProgressInfo {
+  stage: PdfExtractStage;
+  page: number;
+  numPages: number;
+  message?: string;
+}
+
+export interface ExtractPdfOptions {
+  signal?: AbortSignal;
+  onProgress?: (info: ExtractPdfProgressInfo) => void;
+  requestPassword?: (info: { reason: 'need_password' | 'wrong_password' }) => Promise<string | null>;
+  allowLargePdf?: boolean;
+  ocrScale?: number;
+}
+
 // Interface for the global pdfjsLib object
 export interface PDFJS {
-  getDocument: (url: string | Uint8Array) => {
+  getDocument: (
+    src: string | Uint8Array | { data: Uint8Array }
+  ) => {
     promise: Promise<PDFDocumentProxy>;
+    onPassword?: (updatePassword: (password: string) => void, reason: number) => void;
   };
   GlobalWorkerOptions: {
     workerSrc: string;
@@ -76,8 +106,19 @@ export interface PDFDocumentProxy {
 
 export interface PDFPageProxy {
   getTextContent: () => Promise<PDFTextContent>;
+  getViewport: (opts: { scale: number; rotation?: number }) => { width: number; height: number };
+  render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => {
+    promise: Promise<void>;
+  };
+  rotate?: number;
 }
 
 export interface PDFTextContent {
-  items: Array<{ str: string }>;
+  items: PDFTextItem[];
+}
+
+export interface PDFTextItem {
+  str: string;
+  transform?: number[]; // [a,b,c,d,e,f]
+  width?: number;
 }

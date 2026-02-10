@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Focus Reader</title>
+    <link rel="icon" href="/pwa-icon.svg" />
+    <link rel="apple-touch-icon" href="/pwa-icon.svg" />
     
     <!-- Google Fonts: Merriweather (Serif) and Inter (Sans-Serif) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,6 +57,9 @@
       ::-webkit-scrollbar-track { background: rgb(var(--color-app-bg)); }
       ::-webkit-scrollbar-thumb { background: rgba(var(--color-text-secondary), 0.35); border-radius: 3px; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(var(--color-text-secondary), 0.5); }
+
+      /* Prevent iOS/Android tap flash on interactive elements */
+      * { -webkit-tap-highlight-color: transparent; }
     </style>
 
     <!-- PDF.js for parsing PDFs -->

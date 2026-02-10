@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Book, BookSettings, ReaderMode, ReaderPreferences } from './types';
+import { Book, BookSettings, Bookmark, ReaderMode, ReaderPreferences } from './types';
 import { useRSVP } from './hooks/useRSVP';
-import { saveBook, getLibrary, deleteBook, updateBookProgress, clearLibrary, updateBookSettings, updateBookTitle } from './services/storage';
+import { saveBook, getLibrary, deleteBook, updateBookProgress, clearLibrary, clearAllData, updateBookSettings, updateBookTitle } from './services/storage';
 import { getReaderPreferences, saveReaderPreferences } from './services/preferences';
 import { ControlCenter } from './components/ControlCenter';
 import { TextInput } from './components/TextInput';
@@ -12,13 +12,23 @@ import { RSVPEnhancedReader } from './components/RSVPEnhancedReader';
 import { BionicFlowReader } from './components/BionicFlowReader';
 import { BionicControls } from './components/BionicControls';
 import { ThemeSelector } from './components/ThemeSelector';
-import { Trash2, Menu, PanelLeftClose } from 'lucide-react';
+import { HelpOverlay } from './components/HelpOverlay';
+import { BookMarked, Trash2, Menu, PanelLeftClose, Download } from 'lucide-react';
+import { BookmarksPanel } from './components/BookmarksPanel';
+import { LibrarySortMenu } from './components/LibrarySortMenu';
 
 export default function App() {
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [library, setLibrary] = useState<Book[]>([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    // On narrow viewports, default to closed so the drawer doesn't cover the whole app on load.
+    // This is evaluated client-side only (Vite app).
+    if (typeof window === 'undefined') return true;
+    return !window.matchMedia('(max-width: 768px)').matches;
+  });
   const [isUiVisible, setIsUiVisible] = useState(true);
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [librarySort, setLibrarySort] = useState<'recent' | 'progress' | 'created'>('recent');
   const uiIdleTimeoutRef = useRef<number | null>(null);
   const [isBionicScrolling, setIsBionicScrolling] = useState(false);
   const bionicScrollIdleTimeoutRef = useRef<number | null>(null);
@@ -40,6 +50,14 @@ export default function App() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [controlsModeReady, setControlsModeReady] = useState(true);
   const [isCompactPortrait, setIsCompactPortrait] = useState(false);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 768px)').matches;
+  });
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [suppressHelp, setSuppressHelp] = useState(false);
+  const [showBionicHint, setShowBionicHint] = useState(false);
+  const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
 
   const initialPrefs = useMemo<ReaderPreferences>(() => getReaderPreferences(), []);
   const [readerSettings, setReaderSettings] = useState<ReaderPreferences>(initialPrefs);
@@ -56,6 +74,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem('focus_reader_help_prefs');
+      const parsed = raw ? (JSON.parse(raw) as { suppressHelp?: boolean }) : null;
+      setSuppressHelp(Boolean(parsed?.suppressHelp));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const setHelpSuppressed = (next: boolean) => {
+    setSuppressHelp(next);
+    try {
+      localStorage.setItem('focus_reader_help_prefs', JSON.stringify({ suppressHelp: next }));
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
     updatePreference();
@@ -70,6 +107,18 @@ export default function App() {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(orientation: portrait) and (max-width: 1024px)');
     const update = () => setIsCompactPortrait(mediaQuery.matches);
+    update();
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', update);
+      return () => mediaQuery.removeEventListener('change', update);
+    }
+    mediaQuery.addListener(update);
+    return () => mediaQuery.removeListener(update);
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsNarrowViewport(mediaQuery.matches);
     update();
     if (mediaQuery.addEventListener) {
       mediaQuery.addEventListener('change', update);
@@ -106,8 +155,8 @@ export default function App() {
   };
 
   const handleClearData = () => {
-    if (confirm('Are you sure you want to delete all readings?')) {
-      clearLibrary();
+    if (confirm('Clear all Focus Reader data on this device? This removes your library, preferences, and themes.')) {
+      clearAllData();
       setLibrary([]);
       setActiveBook(null);
     }
@@ -145,6 +194,74 @@ export default function App() {
     setTitleDraft(finalTitle);
   };
 
+  const exportActiveBook = () => {
+    if (!activeBook) return;
+    const rawName = (activeBook.title || 'focus-reader').trim() || 'focus-reader';
+    const safeName = rawName.replace(/[^a-z0-9._-]+/gi, '_').slice(0, 80);
+    const blob = new Blob([activeBook.text || ''], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 250);
+  };
+
+  const getActiveBookmarks = (): Bookmark[] => {
+    return (activeBook?.settings?.bookmarks || []).slice();
+  };
+
+  const saveActiveBookmarks = (next: Bookmark[]) => {
+    if (!activeBook) return;
+    updateBookSettings(activeBook.id, { bookmarks: next });
+    setActiveBook((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        settings: {
+          ...(prev.settings || {}),
+          bookmarks: next,
+        },
+      };
+    });
+    setLibrary(getLibrary());
+  };
+
+  const addBookmark = (note?: string) => {
+    if (!activeBook) return;
+    const nextIndex = rsvp.index;
+    const existing = getActiveBookmarks();
+    if (existing.some((b) => b.index === nextIndex)) return;
+    const bm: Bookmark = {
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      index: nextIndex,
+      note,
+      createdAt: Date.now(),
+    };
+    saveActiveBookmarks([bm, ...existing].slice(0, 200));
+  };
+
+  const deleteBookmark = (id: string) => {
+    const existing = getActiveBookmarks();
+    saveActiveBookmarks(existing.filter((b) => b.id !== id));
+  };
+
+  const jumpToBookmark = (idx: number) => {
+    rsvp.seek(idx);
+    if (activeBook) {
+      updateBookProgress(activeBook.id, idx);
+      setLibrary(getLibrary());
+    }
+    setIsBookmarksOpen(false);
+  };
+
+  const getBookmarkSnippet = (idx: number) => {
+    const slice = rsvp.words.slice(idx, idx + 8).join(' ');
+    return slice ? `“${slice}…”` : '';
+  };
+
   // Toggle Sidebar manually
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -153,6 +270,8 @@ export default function App() {
     initialText: activeBook?.text,
     initialIndex: activeBook?.progressIndex,
     initialWpm: 300,
+    smartTimingEnabled: readerSettings.smartTimingEnabled ?? true,
+    comfortModeEnabled: readerSettings.comfortModeEnabled ?? true,
     onProgress: (idx) => {
        // local update
     }
@@ -164,9 +283,44 @@ export default function App() {
   const bionicStrength = readerSettings.bionicStrength;
   const lineWidth = readerSettings.lineWidth;
   const showRsvpScrim = Boolean(activeBook && mode !== 'bionic_flow' && rsvp.isPlaying);
-  const isThemeEngaged = isThemeOpen || isThemeHovered || isThemeFocused;
+  // On touch devices (mobile), focus can "stick" after tapping buttons, which can accidentally
+  // keep the UI visible forever. Treat focus as an engagement signal only on non-narrow viewports.
+  const isThemeEngaged = isThemeOpen || isThemeHovered || (isThemeFocused && !isNarrowViewport);
   const isBionicMode = mode === 'bionic_flow';
-  const isFooterOverlay = isBionicMode || isCompactPortrait;
+  // Use an overlay controls bar so the RSVP word can be truly centered in the full viewport
+  // (controls shouldn't "steal" height from the reader area).
+  const isFooterOverlay = isBionicMode || isCompactPortrait || mode === 'rsvp' || mode === 'rsvp_enhanced';
+  const isLibraryDrawer = isNarrowViewport;
+
+  const visibleLibrary = useMemo(() => {
+    const q = libraryQuery.trim().toLowerCase();
+    let items = library;
+    if (q) {
+      items = library.filter((b) => {
+        const title = (b.title || '').toLowerCase();
+        if (title.includes(q)) return true;
+        // Content search can be heavy; cap to the first chunk for responsiveness.
+        const sample = (b.text || '').slice(0, 6000).toLowerCase();
+        return sample.includes(q);
+      });
+    }
+
+    const sorted = [...items];
+    if (librarySort === 'created') {
+      sorted.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } else if (librarySort === 'progress') {
+      sorted.sort((a, b) => {
+        const ap = a.words?.length ? a.progressIndex / a.words.length : 0;
+        const bp = b.words?.length ? b.progressIndex / b.words.length : 0;
+        if (bp !== ap) return bp - ap;
+        return (b.lastReadAt || 0) - (a.lastReadAt || 0);
+      });
+    } else {
+      sorted.sort((a, b) => (b.lastReadAt || 0) - (a.lastReadAt || 0));
+    }
+
+    return sorted;
+  }, [library, libraryQuery, librarySort]);
 
   const headerEngagedRef = useRef(false);
   const footerEngagedRef = useRef(false);
@@ -289,6 +443,22 @@ export default function App() {
   }, [mode, rsvp]);
 
   useEffect(() => {
+    if (!activeBook) return;
+    if (mode !== 'bionic_flow') return;
+    // First-time bionic hint (local-only).
+    try {
+      const seen = localStorage.getItem('focus_reader_seen_bionic_hint') === 'true';
+      if (seen) return;
+      setShowBionicHint(true);
+      localStorage.setItem('focus_reader_seen_bionic_hint', 'true');
+      const t = window.setTimeout(() => setShowBionicHint(false), 6500);
+      return () => window.clearTimeout(t);
+    } catch {
+      // ignore
+    }
+  }, [activeBook?.id, mode]);
+
+  useEffect(() => {
     if (prefersReducedMotion) {
       if (controlsCleanupTimeoutRef.current) {
         window.clearTimeout(controlsCleanupTimeoutRef.current);
@@ -398,7 +568,7 @@ export default function App() {
         uiIdleTimeoutRef.current = null;
       }
     };
-  }, [activeBook, mode, isThemeEngaged]);
+  }, [activeBook?.id, mode, isThemeEngaged]);
 
   useEffect(() => {
     if (!activeBook || mode !== 'bionic_flow') return;
@@ -641,6 +811,14 @@ export default function App() {
     updateReaderSettings({ lineWidth: width }, { lineWidth: width });
   };
 
+  const handleSmartTimingChange = (enabled: boolean) => {
+    updateReaderSettings({ smartTimingEnabled: enabled });
+  };
+
+  const handleComfortModeChange = (enabled: boolean) => {
+    updateReaderSettings({ comfortModeEnabled: enabled });
+  };
+
   const handleBionicScrollPercent = (percent: number) => {
     bionicScrollPercentRef.current = percent;
     if (!activeBook) return;
@@ -664,16 +842,42 @@ export default function App() {
     }, 400);
   };
 
+  useEffect(() => {
+    // When the library is open as a drawer, prevent background scroll (especially iOS).
+    if (!isLibraryDrawer) return;
+    if (!isSidebarOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isLibraryDrawer, isSidebarOpen]);
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] bg-app-bg text-text-primary overflow-hidden font-ui selection:bg-accent-red selection:text-text-primary">
       
       {/* 1. LEFT SIDEBAR (Collapsible) */}
+      {isLibraryDrawer && isSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close Library"
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px] transition-opacity"
+        />
+      )}
       <aside 
         className={`
-          flex-shrink-0 h-full bg-panel-bg flex flex-col border-r border-text-primary/5 relative z-20 overflow-hidden
+          h-full bg-panel-bg flex flex-col border-r border-text-primary/5 overflow-hidden
           transition-all duration-700 cubic-bezier(0.25, 1, 0.5, 1)
-          ${isSidebarOpen ? 'w-80 translate-x-0 opacity-100' : 'w-0 -translate-x-10 opacity-0 border-none'}
+          ${isLibraryDrawer ? 'fixed top-0 left-0 z-50 w-[min(20rem,86vw)] shadow-2xl' : 'relative z-20 flex-shrink-0'}
+          ${
+            isSidebarOpen
+              ? 'translate-x-0 opacity-100'
+              : isLibraryDrawer
+                ? '-translate-x-full opacity-0 pointer-events-none border-none'
+                : 'w-0 -translate-x-10 opacity-0 border-none'
+          }
+          ${isLibraryDrawer ? '' : isSidebarOpen ? 'w-80' : 'w-0'}
         `}
       >
         
@@ -692,9 +896,22 @@ export default function App() {
 
         {/* Library List */}
         <div className="flex-1 overflow-y-auto px-4 py-2 scrollbar-thin scrollbar-thumb-text-primary/10 scrollbar-track-transparent">
-           <h2 className="px-2 text-xs font-bold uppercase tracking-widest text-text-secondary mb-4 mt-2 opacity-50 whitespace-nowrap">Your Library</h2>
+	           <div className="px-2 mt-2">
+	             <div className="flex items-center justify-between gap-2">
+	               <h2 className="text-xs font-bold uppercase tracking-widest text-text-secondary opacity-50 whitespace-nowrap">Your Library</h2>
+	               <LibrarySortMenu value={librarySort} onChange={setLibrarySort} />
+	             </div>
+
+             <input
+               value={libraryQuery}
+               onChange={(e) => setLibraryQuery(e.target.value)}
+               placeholder="Search…"
+               className="mt-3 w-full rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
+               aria-label="Search library"
+             />
+           </div>
            <Library 
-             books={library} 
+             books={visibleLibrary} 
              onSelect={handleSelectBook} 
              onDelete={handleDelete}
              activeId={activeBook?.id} 
@@ -733,7 +950,13 @@ export default function App() {
           {!activeBook ? (
             // STATE A: Idle / Input
             <div className="w-full max-w-3xl px-8 fade-in animate-in slide-in-from-bottom-4 duration-700">
-               <TextInput onStartReading={handleStartNew} />
+               <TextInput
+                 onStartReading={handleStartNew}
+                 onOpenHelp={() => setIsHelpOpen(true)}
+                 onTryDemo={() => {
+                   if (!suppressHelp) setIsHelpOpen(true);
+                 }}
+               />
             </div>
           ) : (
             // STATE B: Reading Mode (Full Screen Focus)
@@ -747,19 +970,20 @@ export default function App() {
               <div className="w-full h-full min-h-0 flex flex-col relative animate-in fade-in zoom-in-95 duration-700">
               
               {/* Header Elements: Back Button & Mode Toggle */}
-              <div 
-                ref={headerControlsRef}
-                onMouseEnter={() => setIsHeaderHovered(true)}
-                onMouseLeave={() => setIsHeaderHovered(false)}
-                onFocusCapture={handleHeaderFocusCapture}
-                onBlurCapture={handleHeaderBlurCapture}
-                className={`absolute top-0 left-0 w-full p-8 z-20 transition-all duration-500 ${isHeaderVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
-              >
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center">
-                 <button 
-                   onClick={handleExitReader}
-                   className="group inline-flex w-fit items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full text-text-secondary hover:text-text-primary transition-all text-sm font-medium tracking-wide border border-text-primary/5 hover:border-text-primary/20 shadow-lg justify-self-start"
-                 >
+	              <div 
+	                ref={headerControlsRef}
+	                onMouseEnter={() => setIsHeaderHovered(true)}
+	                onMouseLeave={() => setIsHeaderHovered(false)}
+	                onFocusCapture={handleHeaderFocusCapture}
+	                onBlurCapture={handleHeaderBlurCapture}
+	                style={isNarrowViewport ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : undefined}
+	                className={`absolute top-0 left-0 w-full p-4 sm:p-8 z-20 transition-all duration-500 ${isHeaderVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+	              >
+	                <div className="grid grid-cols-[1fr_auto_1fr] items-start sm:items-center">
+	                 <button 
+	                   onClick={handleExitReader}
+	                   className="group inline-flex w-fit items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full text-text-secondary hover:text-text-primary transition-all text-sm font-medium tracking-wide border border-text-primary/5 hover:border-text-primary/20 shadow-lg justify-self-start"
+	                 >
                    <span className="group-hover:-translate-x-1 transition-transform">←</span> 
                    <span className="hidden sm:inline">Library</span>
                  </button>
@@ -784,9 +1008,10 @@ export default function App() {
                     />
                  </div>
 
-                 <div className="text-text-secondary font-header italic opacity-80 hidden sm:block justify-self-end">
-                   {isEditingTitle ? (
-                     <input
+	                 <div className="flex flex-col items-end gap-2 justify-self-end">
+	                   <div className="text-text-secondary font-header italic opacity-80 hidden sm:block">
+	                   {isEditingTitle ? (
+	                     <input
                        type="text"
                        value={titleDraft}
                        onChange={(e) => setTitleDraft(e.target.value)}
@@ -808,12 +1033,42 @@ export default function App() {
                        className="hover:text-text-primary transition-colors text-sm italic"
                        title="Rename document"
                      >
-                       {activeBook.title}
-                     </button>
-                   )}
-                 </div>
-                </div>
-              </div>
+	                       {activeBook.title}
+	                     </button>
+	                   )}
+	                   </div>
+	                   <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:justify-end">
+	                     <button
+	                       type="button"
+	                       onClick={() => setIsHelpOpen(true)}
+	                       className="w-9 h-9 flex items-center justify-center rounded-lg bg-black/30 border border-text-primary/5 text-text-secondary hover:text-text-primary hover:border-text-primary/20 transition-colors font-semibold"
+	                       aria-label="Help"
+	                       title="Help"
+	                     >
+	                       ?
+	                     </button>
+	                     <button
+	                       type="button"
+	                       onClick={() => setIsBookmarksOpen(true)}
+	                       className="w-9 h-9 flex items-center justify-center rounded-lg bg-black/30 border border-text-primary/5 text-text-secondary hover:text-text-primary hover:border-text-primary/20 transition-colors"
+	                       aria-label="Bookmarks"
+	                       title="Bookmarks"
+	                     >
+	                       <BookMarked className="w-4 h-4" />
+	                     </button>
+	                     <button
+	                       type="button"
+	                       onClick={exportActiveBook}
+	                       className="w-9 h-9 flex items-center justify-center rounded-lg bg-black/30 border border-text-primary/5 text-text-secondary hover:text-text-primary hover:border-text-primary/20 transition-colors"
+	                       aria-label="Export as text"
+	                       title="Export as .txt"
+	                     >
+	                       <Download className="w-4 h-4" />
+	                     </button>
+	                   </div>
+	                 </div>
+	                </div>
+	              </div>
 
               {/* Reader Area */}
               <div className="flex-1 w-full min-h-0 relative z-10">
@@ -890,6 +1145,10 @@ export default function App() {
                           progress={rsvp.index}
                           total={rsvp.totalWords}
                           onSeek={rsvp.seek}
+                          smartTimingEnabled={readerSettings.smartTimingEnabled ?? true}
+                          comfortModeEnabled={readerSettings.comfortModeEnabled ?? true}
+                          onSmartTimingChange={handleSmartTimingChange}
+                          onComfortModeChange={handleComfortModeChange}
                         />
                       )}
                     </div>
@@ -918,6 +1177,10 @@ export default function App() {
                         progress={rsvp.index}
                         total={rsvp.totalWords}
                         onSeek={rsvp.seek}
+                        smartTimingEnabled={readerSettings.smartTimingEnabled ?? true}
+                        comfortModeEnabled={readerSettings.comfortModeEnabled ?? true}
+                        onSmartTimingChange={handleSmartTimingChange}
+                        onComfortModeChange={handleComfortModeChange}
                       />
                     )}
                   </div>
@@ -934,6 +1197,42 @@ export default function App() {
           onMouseEnter={() => setIsThemeHovered(true)}
           onMouseLeave={() => setIsThemeHovered(false)}
           onFocusWithinChange={setIsThemeFocused}
+        />
+
+        {showBionicHint && (
+          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-full bg-black/55 backdrop-blur-md border border-text-primary/10 shadow-xl text-sm text-text-primary">
+              <span className="text-text-primary/90">
+                Tip: In Bionic mode, hover/touch the <span className="font-bold">top</span> or <span className="font-bold">bottom</span> edge to reveal controls.
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowBionicHint(false)}
+                className="p-1 rounded-full text-text-secondary hover:text-text-primary hover:bg-text-primary/10 transition-colors"
+                aria-label="Dismiss tip"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        <HelpOverlay
+          isOpen={isHelpOpen}
+          mode={mode}
+          hasActiveBook={Boolean(activeBook)}
+          onClose={() => setIsHelpOpen(false)}
+          onDontShowAgain={() => setHelpSuppressed(true)}
+        />
+
+        <BookmarksPanel
+          isOpen={Boolean(activeBook) && isBookmarksOpen}
+          bookmarks={getActiveBookmarks()}
+          onAdd={addBookmark}
+          onJump={jumpToBookmark}
+          onDelete={deleteBookmark}
+          onClose={() => setIsBookmarksOpen(false)}
+          getSnippet={getBookmarkSnippet}
         />
       </main>
 

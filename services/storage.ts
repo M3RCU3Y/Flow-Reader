@@ -1,6 +1,11 @@
 import { Book, BookSettings } from '../types';
 
 const STORAGE_KEY = 'focus_reader_library';
+const PREFS_KEY = 'focus_reader_prefs';
+const CUSTOM_THEMES_KEY = 'focus_reader_custom_themes';
+const SELECTED_THEME_KEY = 'focus_reader_selected_theme';
+const HELP_PREFS_KEY = 'focus_reader_help_prefs';
+const BIONIC_HINT_KEY = 'focus_reader_seen_bionic_hint';
 
 export const saveBook = (book: Book): void => {
   const library = getLibrary();
@@ -54,6 +59,12 @@ export const getLibrary = (): Book[] => {
     return data ? JSON.parse(data) : [];
   } catch (e) {
     console.error("Failed to parse library", e);
+    // Corrupted storage should not brick the app; reset.
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     return [];
   }
 };
@@ -66,4 +77,14 @@ export const deleteBook = (id: string): Book[] => {
 
 export const clearLibrary = (): void => {
   localStorage.removeItem(STORAGE_KEY);
+};
+
+export const clearAllData = (): void => {
+  // Local-first promise: clear everything this app stores.
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(PREFS_KEY);
+  localStorage.removeItem(CUSTOM_THEMES_KEY);
+  localStorage.removeItem(SELECTED_THEME_KEY);
+  localStorage.removeItem(HELP_PREFS_KEY);
+  localStorage.removeItem(BIONIC_HINT_KEY);
 };

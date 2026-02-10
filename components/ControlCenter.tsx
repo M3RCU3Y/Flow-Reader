@@ -9,6 +9,10 @@ interface ControlCenterProps {
   progress: number;
   total: number;
   onSeek: (index: number) => void;
+  smartTimingEnabled?: boolean;
+  comfortModeEnabled?: boolean;
+  onSmartTimingChange?: (enabled: boolean) => void;
+  onComfortModeChange?: (enabled: boolean) => void;
 }
 
 export const ControlCenter: React.FC<ControlCenterProps> = ({
@@ -18,15 +22,31 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
   setWpm,
   progress,
   total,
-  onSeek
-}) => {
-  
-  // Calculate remaining time
-  const wordsLeft = total - progress;
-  const minutesLeft = Math.ceil(wordsLeft / wpm);
+  onSeek,
+  smartTimingEnabled,
+  comfortModeEnabled,
+  onSmartTimingChange,
+  onComfortModeChange
+	}) => {
+	  const [toast, setToast] = React.useState<{ id: number; text: string } | null>(null);
 
-  return (
-    <div className="w-full bg-panel-bg/50 backdrop-blur-sm border border-text-primary/5 rounded-2xl p-4 sm:p-6 shadow-2xl">
+	  const showToast = React.useCallback((text: string) => {
+	    setToast({ id: Date.now(), text });
+	  }, []);
+
+	  React.useEffect(() => {
+	    if (!toast) return;
+	    const t = window.setTimeout(() => setToast(null), 2200);
+	    return () => window.clearTimeout(t);
+	  }, [toast?.id]);
+	  
+	  // Calculate remaining time
+	  const wordsLeft = total - progress;
+	  const minutesLeft = Math.ceil(wordsLeft / wpm);
+
+	  return (
+	    <>
+	      <div className="w-full bg-panel-bg/50 backdrop-blur-sm border border-text-primary/5 rounded-2xl p-4 sm:p-6 shadow-2xl">
       
       {/* Progress Scrubber */}
       <div className="mb-6 group">
@@ -51,6 +71,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
            <button 
              onClick={onToggle}
              className="w-12 h-12 shrink-0 flex items-center justify-center bg-text-primary text-app-bg rounded-full hover:bg-accent-red hover:text-white transition-all shadow-glow"
+             aria-label={isPlaying ? 'Pause' : 'Play'}
            >
              {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
            </button>
@@ -72,11 +93,80 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
                value={wpm}
                onChange={(e) => setWpm(parseInt(e.target.value))}
                className="flex-1 h-1 bg-text-primary/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-text-primary hover:[&::-webkit-slider-thumb]:bg-accent-red"
+               aria-label="Speed (WPM)"
              />
            </div>
         </div>
 
       </div>
-    </div>
-  );
-};
+
+	      {(typeof smartTimingEnabled === 'boolean' || typeof comfortModeEnabled === 'boolean') && (
+	        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
+	          <div className="flex items-center gap-2">
+	            {typeof smartTimingEnabled === 'boolean' && (
+	              <button
+	                type="button"
+	                role="switch"
+	                aria-checked={smartTimingEnabled}
+	                onClick={() => {
+	                  const next = !smartTimingEnabled;
+	                  onSmartTimingChange?.(next);
+	                  if (next) showToast('Smart timing on: pauses for punctuation and paragraphs.');
+	                }}
+	                className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:border-accent-red/60 focus-visible:shadow-glow ${
+	                  smartTimingEnabled
+	                    ? 'bg-accent-red/15 border-accent-red/30 text-text-primary shadow-glow'
+	                    : 'bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/20'
+	                }`}
+	              >
+	                <span
+	                  aria-hidden="true"
+	                  className={`w-3.5 h-3.5 rounded-full border transition-colors ${
+	                    smartTimingEnabled ? 'bg-accent-red border-accent-red' : 'bg-transparent border-text-primary/20'
+	                  }`}
+	                />
+	                Smart timing
+	              </button>
+	            )}
+	            {typeof comfortModeEnabled === 'boolean' && (
+	              <button
+	                type="button"
+	                role="switch"
+	                aria-checked={comfortModeEnabled}
+	                onClick={() => {
+	                  const next = !comfortModeEnabled;
+	                  onComfortModeChange?.(next);
+	                  if (next) showToast('Comfort mode on: ramps up smoothly and eases after rewinds.');
+	                }}
+	                className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:border-accent-red/60 focus-visible:shadow-glow ${
+	                  comfortModeEnabled
+	                    ? 'bg-accent-red/15 border-accent-red/30 text-text-primary shadow-glow'
+	                    : 'bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/20'
+	                }`}
+	              >
+	                <span
+	                  aria-hidden="true"
+	                  className={`w-3.5 h-3.5 rounded-full border transition-colors ${
+	                    comfortModeEnabled ? 'bg-accent-red border-accent-red' : 'bg-transparent border-text-primary/20'
+	                  }`}
+	                />
+	                Comfort mode
+	              </button>
+	            )}
+	          </div>
+	        </div>
+	      )}
+	    </div>
+	    {toast && (
+	      <div
+	        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 24px)' }}
+	        className="fixed left-1/2 -translate-x-1/2 z-[999] px-4 py-2 rounded-full bg-panel-bg/85 backdrop-blur-md border border-text-primary/10 shadow-2xl text-xs text-text-primary animate-in fade-in slide-in-from-bottom-2 duration-200"
+	        role="status"
+	        aria-live="polite"
+	      >
+	        {toast.text}
+	      </div>
+	    )}
+	  </>
+	  );
+	};
