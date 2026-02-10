@@ -133,6 +133,7 @@ export default function App() {
     return () => mediaQuery.removeListener(update);
   }, []);
 
+  const showDashboardHamburger = !isSidebarOpen && !activeBook;
 
   const handleStartNew = (title: string, text: string) => {
     const words = text.trim().split(/\s+/).filter(w => w.length > 0);
@@ -1056,13 +1057,20 @@ export default function App() {
         {/* Content Area */}
         <div className="flex-1 w-full h-full min-h-0 flex flex-col items-center justify-center relative">
           
-          {!activeBook ? (
-            // STATE A: Idle / Input
-            <div className="w-full max-w-3xl px-8 fade-in animate-in slide-in-from-bottom-4 duration-700">
-               <TextInput
-                 onStartReading={handleStartNew}
-                 onOpenHelp={() => setIsHelpOpen(true)}
-                 onTryDemo={() => {
+	          {!activeBook ? (
+	            // STATE A: Idle / Input
+	            <div
+                className="w-full max-w-3xl px-8 fade-in animate-in slide-in-from-bottom-4 duration-700"
+                style={
+                  showDashboardHamburger && isNarrowViewport
+                    ? { paddingTop: 'calc(env(safe-area-inset-top) + 80px)' }
+                    : undefined
+                }
+              >
+	               <TextInput
+	                 onStartReading={handleStartNew}
+	                 onOpenHelp={() => setIsHelpOpen(true)}
+	                 onTryDemo={() => {
                    if (!suppressHelp) setIsHelpOpen(true);
                  }}
                />
@@ -1206,13 +1214,13 @@ export default function App() {
                       contextStrength={contextStrength}
                       onContextStrengthChange={handleContextStrengthChange}
                       isUiVisible={isUiVisible}
-                      fitToWidth={isCompactPortrait}
-                    />
-                  ) : (
-                    <RSVPReader word={rsvp.currentWord} fitToWidth={isCompactPortrait} />
-                  )}
-                </div>
-              </div>
+	                      fitToWidth={isCompactPortrait}
+	                    />
+	                  ) : (
+	                    <RSVPReader word={rsvp.currentWord} fitToWidth={isNarrowViewport} isMobile={isNarrowViewport} />
+	                  )}
+	                </div>
+	              </div>
 
               {/* Controls Area */}
               <div

@@ -8,6 +8,7 @@ interface ReaderDisplayProps {
   showContext?: boolean;
   contextStrength?: ContextStrength;
   fitToWidth?: boolean;
+  textSizeClassName?: string;
 }
 
 const CONTEXT_STYLES: Record<
@@ -26,6 +27,7 @@ export const ReaderDisplay: React.FC<ReaderDisplayProps> = ({
   showContext = false,
   contextStrength = 'medium',
   fitToWidth = false,
+  textSizeClassName,
 }) => {
   // Logic to process the word
   const getPivotIndex = (w: string) => {
@@ -56,11 +58,12 @@ export const ReaderDisplay: React.FC<ReaderDisplayProps> = ({
     if (!el) return;
     const { clientWidth, scrollWidth } = el;
     if (clientWidth <= 0 || scrollWidth <= 0) return;
-    if (scrollWidth <= clientWidth) {
+    // Only shrink when the word would meaningfully overflow (avoid tiny “micro shrink” on borderline widths).
+    if (scrollWidth <= clientWidth * 1.02) {
       setScale(1);
       return;
     }
-    const next = Math.max(0.65, Math.min(1, clientWidth / scrollWidth));
+    const next = Math.max(0.72, Math.min(1, clientWidth / scrollWidth));
     setScale(next);
   };
 
@@ -85,7 +88,9 @@ export const ReaderDisplay: React.FC<ReaderDisplayProps> = ({
       {/* Guides (Optional, keeping it clean for High-End look) */}
       <div
         ref={containerRef}
-        className="relative flex items-baseline justify-center w-full max-w-4xl text-[clamp(44px,14vw,64px)] leading-none font-header font-bold text-text-primary overflow-visible"
+        className={`relative flex items-baseline justify-center w-full max-w-4xl ${
+          textSizeClassName ?? 'text-[clamp(44px,14vw,64px)]'
+        } leading-none font-header font-bold text-text-primary overflow-visible`}
         style={{
           transform: scale !== 1 ? `scale(${scale})` : undefined,
           transformOrigin: 'center',
