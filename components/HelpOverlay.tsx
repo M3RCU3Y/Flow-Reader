@@ -83,7 +83,7 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({
             </div>
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-text-secondary">
               <div className="flex items-center justify-between gap-4">
-                <span>Play / pause</span>
+                <span>Play / pause (replays at end)</span>
                 <code className="px-2 py-1 rounded bg-black/30 border border-text-primary/10 text-text-primary">
                   Space
                 </code>
@@ -138,6 +138,10 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({
               Your library, preferences, and themes are saved in your browser storage on this device.
               Use <span className="text-text-primary/80">Clear Data</span> in the Library to remove all Focus Reader data.
             </p>
+            <p className="mt-2 text-sm text-text-secondary">
+              URL import works for most pages, but some sites block automated readers. Open the page in a normal tab,
+              complete any checks, then paste text if needed.
+            </p>
           </section>
         </div>
 
@@ -175,4 +179,3 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({
     </div>
   );
 };
-

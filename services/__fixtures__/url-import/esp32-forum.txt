@@ -1,0 +1,33 @@
+Title: ESP32-S3: multi devices with usb host library
+URL Source: https://esp32.com/viewtopic.php?t=32063
+Markdown Content:
+ESP32 Forum
+Board index
+Quick links
+FAQ
+Register
+Login
+Unanswered topics
+Active topics
+
+ESP32-S3: multi devices with usb host library
+
+Hi all,
+
+I am trying to use multiple usb serial devices with ESP32-S3 host.
+
+I followed [this](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s2/api-reference/peripherals/usb_host.html) reference,
+and also checked [url=https://github.com/espressif/esp-idf/tree/master/examples/peripherals/usb/host]the example[/url].
+
+But currently I can only get one device stable.
+
+by user123 » Mon Jan 16, 2026 12:31 pm
+
+Home
+Forum
+Quick links
+search.php?search_id=active_topics&sid=dd71e23bf67ffcec663cc517cdaf4acd
+viewtopic.php?t=32063&sid=dd71e23bf67ffcec663cc517cdaf4acd
+
+[1]: https://esp32.com/viewtopic.php?t=32063
+[2]: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s2/api-reference/peripherals/usb_host.html

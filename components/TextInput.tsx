@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, Loader2, ArrowRight, X, Maximize2 } from 'lucide-react';
 import { extractTextFromPDF } from '../services/pdfService';
+import { cleanImportedText, normalizeUrlInput, parseProxyEnvelope } from '../services/urlImportService';
 import type { ExtractPdfProgressInfo, PdfExtractStage, ProcessingStatus } from '../types';
 
 interface TextInputProps {
@@ -9,10 +10,42 @@ interface TextInputProps {
   onTryDemo?: (title: string, text: string) => void;
 }
 
+type UrlImportState = 'idle' | 'blocked' | 'error';
+
+const BOT_CHECK_MARKERS = [
+  'captcha',
+  'verify you are human',
+  'verification required',
+  'cloudflare',
+  'attention required',
+  'access denied',
+  'just a moment',
+  'robot check',
+  'security check',
+  'challenge',
+  'cf-challenge',
+];
+
+const MIN_URL_IMPORT_CHARS = 40;
+const MIN_CLEANED_NON_WHITESPACE = 140;
+const MIN_CLEANED_WORDS = 24;
+
+const isLikelyBotCheckResponse = (raw: string, parsedText: string, cleanedText?: string) => {
+  const source = raw.toLowerCase();
+  if (BOT_CHECK_MARKERS.some((marker) => source.includes(marker))) return true;
+  const compact = parsedText.replace(/\s+/g, '');
+  if (compact.length < MIN_URL_IMPORT_CHARS) return true;
+  if (!cleanedText) return false;
+  const cleanedWords = cleanedText.trim().split(/\s+/).filter(Boolean).length;
+  const cleanedCompact = cleanedText.replace(/\s+/g, '');
+  return cleanedCompact.length < MIN_CLEANED_NON_WHITESPACE && cleanedWords < MIN_CLEANED_WORDS;
+};
+
 export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp, onTryDemo }) => {
   const [text, setText] = useState('');
   const [title, setTitle] = useState('');
   const [status, setStatus] = useState<ProcessingStatus>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isFullscreenEditorOpen, setIsFullscreenEditorOpen] = useState(false);
@@ -27,6 +60,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   const [passwordDraft, setPasswordDraft] = useState('');
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
   const [urlDraft, setUrlDraft] = useState('');
+  const [urlImportState, setUrlImportState] = useState<UrlImportState>('idle');
+  const [urlImportMessage, setUrlImportMessage] = useState('');
+  const [blockedSourceUrl, setBlockedSourceUrl] = useState('');
+  const [isPastingClipboard, setIsPastingClipboard] = useState(false);
 
   useEffect(() => {
     if (!isFullscreenEditorOpen) return;
@@ -83,6 +120,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     setTitle(demoTitle);
     setText(demoText);
     setStatus('success');
+    setErrorMessage('');
+    setUrlImportState('idle');
+    setUrlImportMessage('');
+    setBlockedSourceUrl('');
     resetProgress();
     onTryDemo?.(demoTitle, demoText);
     onOpenHelp?.();
@@ -96,6 +137,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     e.target.value = '';
 
     setStatus('processing');
+    setErrorMessage('');
     resetProgress();
     setTitle(file.name.replace(/\.(pdf|docx|txt)$/i, ''));
 
@@ -182,6 +224,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     } catch (error) {
       console.error(error);
       setStatus('error');
+      setErrorMessage('Failed to load file. Please try again.');
       resetProgress();
     } finally {
       abortControllerRef.current = null;
@@ -195,6 +238,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setStatus('idle');
+    setErrorMessage('');
     resetProgress();
     if (passwordResolverRef.current) {
       passwordResolverRef.current(null);
@@ -226,50 +270,15 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     return 'Cleaning';
   }, [progressStage]);
 
-  const normalizeUrl = (raw: string) => {
-    const trimmed = raw.trim();
-    if (!trimmed) return '';
-    if (/^https?:\/\//i.test(trimmed)) return trimmed;
-    return `https://${trimmed}`;
-  };
-
-  const parseJinaText = (raw: string): { title?: string; text: string } => {
-    const lines = raw.replace(/\r\n/g, '\n').split('\n');
-    let titleLine: string | undefined;
-    let start = 0;
-
-    for (let i = 0; i < Math.min(lines.length, 40); i++) {
-      const l = (lines[i] || '').trim();
-      if (!l) continue;
-      if (l.toLowerCase().startsWith('title:')) titleLine = l.slice(6).trim();
-      if (/^(markdown|text)\s+content:/i.test(l)) {
-        start = i + 1;
-        break;
-      }
-    }
-
-    while (start < lines.length) {
-      const l = (lines[start] || '').trim();
-      if (!l) {
-        start++;
-        continue;
-      }
-      if (/^(title:|url source:|source:|published:|author:)/i.test(l)) {
-        start++;
-        continue;
-      }
-      break;
-    }
-
-    const text = lines.slice(start).join('\n').replace(/\n{3,}/g, '\n\n').trim();
-    return { title: titleLine, text };
-  };
-
   const importFromUrl = async () => {
-    const url = normalizeUrl(urlDraft);
+    const url = normalizeUrlInput(urlDraft);
     if (!url) return;
 
     setStatus('processing');
+    setErrorMessage('');
+    setUrlImportState('idle');
+    setUrlImportMessage('');
+    setBlockedSourceUrl('');
     resetProgress();
     setProgressStage('loading');
     setProgressMessage('Fetching URL…');
@@ -284,18 +293,86 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       const res = await fetch(proxied, { signal: controller.signal });
       if (!res.ok) throw new Error(`Failed to fetch URL (${res.status})`);
       const raw = await res.text();
-      const parsed = parseJinaText(raw);
+      const parsed = parseProxyEnvelope(raw);
+      const cleaned = cleanImportedText(parsed.body, { sourceUrl: url });
+      if (isLikelyBotCheckResponse(raw, parsed.body, cleaned.text)) {
+        setStatus('idle');
+        setUrlImportState('blocked');
+        setUrlImportMessage(
+          'Import succeeded but the content looks blocked or too noisy to read cleanly. Open the page in your browser, complete checks, then paste article text.'
+        );
+        setBlockedSourceUrl(url);
+        resetProgress();
+        return;
+      }
+      if (!cleaned.text.trim()) {
+        throw new Error('No readable text was returned for this URL.');
+      }
       const nextTitle = parsed.title || url.replace(/^https?:\/\//i, '').slice(0, 64);
       setTitle(nextTitle);
-      setText(parsed.text);
+      setText(cleaned.text);
       setStatus('success');
+      setUrlImportState('idle');
+      setUrlImportMessage(
+        `Imported and cleaned (${cleaned.stats.removedLines} noisy lines removed, ${cleaned.stats.rawUrlsRemoved} links normalized).`
+      );
       resetProgress();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setStatus('error');
+      if (e?.name === 'AbortError') {
+        setStatus('idle');
+        setUrlImportState('idle');
+        setUrlImportMessage('');
+      } else {
+        setStatus('error');
+        setUrlImportState('error');
+        setUrlImportMessage(
+          'Could not import this URL automatically. Try again, or open the page and paste the text.'
+        );
+        setErrorMessage('URL import failed. Check the link or use Open Source Page + Paste from Clipboard.');
+      }
       resetProgress();
     } finally {
       abortControllerRef.current = null;
+    }
+  };
+
+  const openSourcePage = () => {
+    const target = blockedSourceUrl || normalizeUrlInput(urlDraft);
+    if (!target) return;
+    window.open(target, '_blank', 'noopener,noreferrer');
+  };
+
+  const pasteFromClipboard = async () => {
+    setIsPastingClipboard(true);
+    try {
+      if (!navigator.clipboard?.readText) {
+        throw new Error('Clipboard API unavailable');
+      }
+      const clip = await navigator.clipboard.readText();
+      const cleaned = clip.trim();
+      if (!cleaned) {
+        setUrlImportMessage('Clipboard is empty. Copy article text first, then try again.');
+        return;
+      }
+      setText(cleaned);
+      if (!title.trim()) {
+        const fallbackTitle = (blockedSourceUrl || normalizeUrlInput(urlDraft))
+          .replace(/^https?:\/\//i, '')
+          .slice(0, 64);
+        setTitle(fallbackTitle || `Imported Note ${new Date().toLocaleDateString()}`);
+      }
+      setStatus('success');
+      setErrorMessage('');
+      setUrlImportState('idle');
+      setUrlImportMessage('Pasted text from clipboard.');
+    } catch (err) {
+      console.error(err);
+      setUrlImportMessage(
+        'Clipboard access is blocked here. Copy the article text manually and paste it into the editor.'
+      );
+    } finally {
+      setIsPastingClipboard(false);
     }
   };
 
@@ -411,7 +488,13 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       <div className="mt-4 flex flex-col sm:flex-row items-stretch justify-center gap-2">
         <input
           value={urlDraft}
-          onChange={(e) => setUrlDraft(e.target.value)}
+          onChange={(e) => {
+            setUrlDraft(e.target.value);
+            setUrlImportState('idle');
+            setUrlImportMessage('');
+            setBlockedSourceUrl('');
+            setErrorMessage('');
+          }}
           placeholder="Paste an article URL…"
           className="w-full sm:w-[28rem] rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
           aria-label="Article URL"
@@ -429,6 +512,43 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       <p className="mt-2 text-center text-xs text-text-secondary/60">
         URL import uses a public text extraction proxy for compatibility with most sites.
       </p>
+
+      {urlImportMessage && (
+        <p
+          className={`mt-2 text-center text-xs ${
+            urlImportState === 'error' ? 'text-red-400' : 'text-text-secondary/80'
+          }`}
+        >
+          {urlImportMessage}
+        </p>
+      )}
+
+      {urlImportState === 'blocked' && (
+        <div className="mt-3 rounded-xl border border-text-primary/10 bg-panel-bg/70 p-4">
+          <h3 className="text-sm font-semibold text-text-primary">This page needs a quick browser check</h3>
+          <p className="mt-1 text-xs text-text-secondary">
+            Some sites require CAPTCHA/login interaction before text extraction works. Open the source page,
+            complete any checks, then paste article text here.
+          </p>
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={openSourcePage}
+              className="px-3 py-2 rounded-lg text-sm font-medium bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 hover:border-text-primary/20 transition-colors"
+            >
+              Open Source Page
+            </button>
+            <button
+              type="button"
+              onClick={pasteFromClipboard}
+              disabled={isPastingClipboard}
+              className="px-3 py-2 rounded-lg text-sm font-medium bg-panel-bg border border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isPastingClipboard ? 'Pasting…' : 'Paste from Clipboard'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {isFullscreenEditorOpen && (
         <div className="fixed inset-0 z-50 flex flex-col bg-app-bg">
@@ -554,9 +674,9 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         </div>
       )}
 
-      {status === 'error' && (
+      {status === 'error' && errorMessage && (
         <p className="mt-4 text-center text-red-500 text-sm">
-          Failed to load file. Please try again.
+          {errorMessage}
         </p>
       )}
 

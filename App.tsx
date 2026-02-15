@@ -62,6 +62,7 @@ export default function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [suppressHelp, setSuppressHelp] = useState(false);
   const [showBionicHint, setShowBionicHint] = useState(false);
+  const [isBionicHintFading, setIsBionicHintFading] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
 
   const initialPrefs = useMemo<ReaderPreferences>(() => getReaderPreferences(), []);
@@ -72,6 +73,8 @@ export default function App() {
   const scrollPersistTimeoutRef = useRef<number | null>(null);
   const controlsCleanupTimeoutRef = useRef<number | null>(null);
   const previousModeRef = useRef<ReaderMode>(initialPrefs.lastMode);
+  const bionicHintFadeRef = useRef<number | null>(null);
+  const bionicHintHideRef = useRef<number | null>(null);
 
   // Initialize library
   useEffect(() => {
@@ -448,6 +451,27 @@ export default function App() {
     }
   }, [mode, rsvp]);
 
+  const clearBionicHintTimers = () => {
+    if (bionicHintFadeRef.current) {
+      window.clearTimeout(bionicHintFadeRef.current);
+      bionicHintFadeRef.current = null;
+    }
+    if (bionicHintHideRef.current) {
+      window.clearTimeout(bionicHintHideRef.current);
+      bionicHintHideRef.current = null;
+    }
+  };
+
+  const dismissBionicHint = () => {
+    clearBionicHintTimers();
+    setIsBionicHintFading(true);
+    bionicHintHideRef.current = window.setTimeout(() => {
+      setShowBionicHint(false);
+      setIsBionicHintFading(false);
+      bionicHintHideRef.current = null;
+    }, 320);
+  };
+
   useEffect(() => {
     if (!activeBook) return;
     if (mode !== 'bionic_flow') return;
@@ -456,13 +480,24 @@ export default function App() {
       const seen = localStorage.getItem('focus_reader_seen_bionic_hint') === 'true';
       if (seen) return;
       setShowBionicHint(true);
+      setIsBionicHintFading(false);
       localStorage.setItem('focus_reader_seen_bionic_hint', 'true');
-      const t = window.setTimeout(() => setShowBionicHint(false), 6500);
-      return () => window.clearTimeout(t);
+      bionicHintFadeRef.current = window.setTimeout(() => {
+        setIsBionicHintFading(true);
+        bionicHintFadeRef.current = null;
+      }, 3500);
+      bionicHintHideRef.current = window.setTimeout(() => {
+        setShowBionicHint(false);
+        setIsBionicHintFading(false);
+        bionicHintHideRef.current = null;
+      }, 3820);
+      return () => clearBionicHintTimers();
     } catch {
       // ignore
     }
   }, [activeBook?.id, mode]);
+
+  useEffect(() => clearBionicHintTimers, []);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -1332,14 +1367,18 @@ export default function App() {
         />
 
         {showBionicHint && (
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40">
+          <div
+            className={`absolute top-24 left-1/2 -translate-x-1/2 z-40 transition-opacity duration-300 ${
+              isBionicHintFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}
+          >
             <div className="flex items-center gap-3 px-4 py-3 rounded-full bg-black/55 backdrop-blur-md border border-text-primary/10 shadow-xl text-sm text-text-primary">
               <span className="text-text-primary/90">
                 Tip: In Bionic mode, hover/touch the <span className="font-bold">top</span> or <span className="font-bold">bottom</span> edge to reveal controls.
               </span>
               <button
                 type="button"
-                onClick={() => setShowBionicHint(false)}
+                onClick={dismissBionicHint}
                 className="p-1 rounded-full text-text-secondary hover:text-text-primary hover:bg-text-primary/10 transition-colors"
                 aria-label="Dismiss tip"
               >

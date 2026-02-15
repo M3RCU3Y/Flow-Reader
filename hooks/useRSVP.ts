@@ -156,16 +156,27 @@ export const useRSVP = ({
 
   const togglePlay = useCallback(() => {
     setIsPlaying((p) => {
-      const next = !p;
-      if (next) {
-        playStartIndexRef.current = index;
-        slowdownUntilRef.current = null;
-      } else {
+      if (p) {
         clearTimer();
+        return false;
       }
-      return next;
+
+      if (totalWords <= 0) return false;
+
+      // If playback has reached the end, pressing play should restart from the beginning.
+      const shouldReplayFromStart = index >= totalWords - 1;
+      if (shouldReplayFromStart) {
+        setIndex(0);
+        onProgress?.(0);
+        playStartIndexRef.current = 0;
+      } else {
+        playStartIndexRef.current = index;
+      }
+
+      slowdownUntilRef.current = null;
+      return true;
     });
-  }, [clearTimer, index]);
+  }, [clearTimer, index, onProgress, totalWords]);
 
   const reset = useCallback(() => {
     setIsPlaying(false);
@@ -202,4 +213,3 @@ export const useRSVP = ({
     totalWords,
   };
 };
-
