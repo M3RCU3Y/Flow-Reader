@@ -24,6 +24,7 @@ export const Library: React.FC<LibraryProps> = ({ books, onSelect, onDelete, act
       {books.map((book) => {
         const progress = Math.round((book.progressIndex / book.words.length) * 100) || 0;
         const isActive = book.id === activeId;
+        const lastSummary = book.settings?.lastSessionSummary;
         
         return (
           <li 
@@ -61,6 +62,11 @@ export const Library: React.FC<LibraryProps> = ({ books, onSelect, onDelete, act
                  </div>
               </div>
             </div>
+            {lastSummary && (
+              <div className="mt-2 text-[11px] text-text-secondary/70">
+                Last session: {lastSummary.wordsRead}w • {Math.max(1, Math.round((lastSummary.endedAt - lastSummary.startedAt) / 60000))}m
+              </div>
+            )}
           </li>
         );
       })}

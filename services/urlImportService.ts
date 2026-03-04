@@ -10,12 +10,16 @@ export interface CleanStats {
   rawUrlsRemoved: number;
   longTokensSplit: number;
   droppedReferenceDefs: number;
+  suspiciousLeftovers: number;
 }
 
 export interface CleanedImportResult {
   text: string;
   stats: CleanStats;
+  suspiciousTokens: string[];
 }
+
+export type UrlImportProfile = 'auto' | 'forum' | 'docs' | 'news';
 
 const URL_RE = /\bhttps?:\/\/[^\s<>)\]]+/gi;
 const WWW_RE = /\bwww\.[^\s<>)\]]+/gi;
@@ -34,6 +38,13 @@ const domainFromUrl = (sourceUrl: string) => {
   } catch {
     return '';
   }
+};
+
+const inferProfile = (domain: string, input: UrlImportProfile): UrlImportProfile => {
+  if (input !== 'auto') return input;
+  if (/forum|phpbb|reddit|discourse/.test(domain)) return 'forum';
+  if (/docs|readthedocs|developer|dev\./.test(domain)) return 'docs';
+  return 'news';
 };
 
 const looksLikeHtml = (input: string) => /<!doctype html|<html\b|<body\b/i.test(input);
@@ -140,7 +151,7 @@ const replaceLinksAndMarkup = (input: string) => {
   return { output, rawUrlsRemoved, droppedReferenceDefs };
 };
 
-const shouldDropLine = (line: string, domain: string) => {
+const shouldDropLine = (line: string, domain: string, profile: UrlImportProfile) => {
   const compact = collapseSpaces(line);
   if (!compact) return false;
 
@@ -149,7 +160,7 @@ const shouldDropLine = (line: string, domain: string) => {
   if (BOILERPLATE_LINE_RE.test(compact)) return true;
 
   const isPhpbbLike = domain.endsWith('esp32.com') || domain.endsWith('phpbb.com');
-  if (isPhpbbLike) {
+  if (profile === 'forum' || isPhpbbLike) {
     if (
       /(esp32 forum|quick links|unanswered topics|active topics|contact us|board index|hello,\s*guest|login|register)/i.test(
         compact
@@ -158,6 +169,14 @@ const shouldDropLine = (line: string, domain: string) => {
       return true;
     }
     if (/^(home|forum|faq)$/i.test(compact)) return true;
+  }
+
+  if (profile === 'docs') {
+    if (/^(on this page|table of contents|navigation|edit this page|last updated)/i.test(compact)) return true;
+  }
+
+  if (profile === 'news') {
+    if (/^(share this|advertisement|subscribe|newsletter|related articles?)$/i.test(compact)) return true;
   }
 
   // Drop very short utility lines that are usually chrome labels.
@@ -221,11 +240,12 @@ const splitLongUrlishTokens = (text: string) => {
 
 export const cleanImportedText = (
   body: string,
-  ctx: { sourceUrl: string }
+  ctx: { sourceUrl: string; profile?: UrlImportProfile }
 ): CleanedImportResult => {
   const normalized = body.replace(/\r\n/g, '\n').normalize('NFKC');
   const base = looksLikeHtml(normalized) ? stripHtml(normalized) : normalized;
   const domain = domainFromUrl(ctx.sourceUrl);
+  const profile = inferProfile(domain, ctx.profile || 'auto');
   const linesBefore = base.split('\n').length;
 
   const { output, rawUrlsRemoved, droppedReferenceDefs } = replaceLinksAndMarkup(base);
@@ -233,7 +253,7 @@ export const cleanImportedText = (
   let removedLines = 0;
 
   for (const line of output.split('\n')) {
-    if (shouldDropLine(line, domain)) {
+    if (shouldDropLine(line, domain, profile)) {
       removedLines += 1;
       continue;
     }
@@ -244,9 +264,17 @@ export const cleanImportedText = (
   const split = splitLongUrlishTokens(rebuilt);
   const cleanedText = split.text.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').trim();
   const linesAfter = cleanedText ? cleanedText.split('\n').length : 0;
+  const suspiciousTokens = Array.from(
+    new Set(
+      (cleanedText.match(/\S{30,}/g) || [])
+        .filter((token) => /[\/_=#%|[\]{}]/.test(token))
+        .slice(0, 8)
+    )
+  );
 
   return {
     text: cleanedText,
+    suspiciousTokens,
     stats: {
       linesBefore,
       linesAfter,
@@ -254,6 +282,7 @@ export const cleanImportedText = (
       rawUrlsRemoved,
       longTokensSplit: split.longTokensSplit,
       droppedReferenceDefs,
+      suspiciousLeftovers: suspiciousTokens.length,
     },
   };
 };

@@ -22,6 +22,10 @@ interface ControlCenterProps {
   comfortModeEnabled?: boolean;
   onSmartTimingChange?: (enabled: boolean) => void;
   onComfortModeChange?: (enabled: boolean) => void;
+  sprintDurationMin?: number | null;
+  sprintEndsAt?: number | null;
+  onStartSprint?: (minutes: number) => void;
+  onStopSprint?: () => void;
 }
 
 export const ControlCenter: React.FC<ControlCenterProps> = ({
@@ -37,9 +41,14 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
   smartTimingEnabled,
   comfortModeEnabled,
   onSmartTimingChange,
-  onComfortModeChange
+  onComfortModeChange,
+  sprintDurationMin,
+  sprintEndsAt,
+  onStartSprint,
+  onStopSprint
 		}) => {
 	  const [toast, setToast] = React.useState<{ id: number; text: string } | null>(null);
+	  const [nowTs, setNowTs] = React.useState(() => Date.now());
 
 	  const showToast = React.useCallback((text: string) => {
 	    setToast({ id: Date.now(), text });
@@ -50,10 +59,23 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
 	    const t = window.setTimeout(() => setToast(null), 2200);
 	    return () => window.clearTimeout(t);
 	  }, [toast?.id]);
+
+	  React.useEffect(() => {
+	    if (!sprintEndsAt) return;
+	    const t = window.setInterval(() => setNowTs(Date.now()), 500);
+	    return () => window.clearInterval(t);
+	  }, [sprintEndsAt]);
 	  
 	  // Calculate remaining time
 	  const wordsLeft = total - progress;
 	  const minutesLeft = Math.ceil(wordsLeft / wpm);
+	  const sprintMsLeft = sprintEndsAt ? Math.max(0, sprintEndsAt - nowTs) : 0;
+	  const sprintProgress =
+	    sprintEndsAt && sprintDurationMin
+	      ? Math.min(100, Math.max(0, Math.round((1 - sprintMsLeft / (sprintDurationMin * 60000)) * 100)))
+	      : 0;
+	  const sprintLabel =
+	    sprintEndsAt && sprintDurationMin ? `${Math.ceil(sprintMsLeft / 60000)}m left` : 'Focus sprint';
 
 	  return (
 	    <>
@@ -195,6 +217,43 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
 	          </div>
 	        </div>
 	      )}
+
+        {(onStartSprint || onStopSprint) && (
+          <div className="mt-4 rounded-xl border border-text-primary/10 bg-black/10 p-3">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-text-secondary font-bold">
+              <span>{sprintLabel}</span>
+              <span>{sprintProgress}%</span>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-text-primary/10 overflow-hidden">
+              <div className="h-full bg-progress transition-[width] duration-300" style={{ width: `${sprintProgress}%` }} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[5, 10, 15, 25].map((min) => (
+                <button
+                  key={min}
+                  type="button"
+                  onClick={() => onStartSprint?.(min)}
+                  className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest border transition-colors ${
+                    sprintDurationMin === min && sprintEndsAt
+                      ? 'bg-accent-red/15 border-accent-red/30 text-text-primary'
+                      : 'bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  {min}m
+                </button>
+              ))}
+              {sprintEndsAt && (
+                <button
+                  type="button"
+                  onClick={onStopSprint}
+                  className="px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest border bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary"
+                >
+                  Stop
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 	    </div>
 	    {toast && (
 	      <div

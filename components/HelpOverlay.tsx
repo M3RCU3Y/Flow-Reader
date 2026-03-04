@@ -1,11 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { X, CircleHelp, Keyboard, MousePointer2, Shield } from 'lucide-react';
-import type { ReaderMode } from '../types';
+import type { DailyGoal, ReaderMode } from '../types';
 
 interface HelpOverlayProps {
   isOpen: boolean;
   mode: ReaderMode;
   hasActiveBook: boolean;
+  studyGoal: DailyGoal;
+  todayMinutes: number;
+  todayWords: number;
+  streakDays: number;
+  onStudyGoalChange: (goal: DailyGoal) => void;
   onClose: () => void;
   onDontShowAgain: () => void;
 }
@@ -14,6 +19,11 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({
   isOpen,
   mode,
   hasActiveBook,
+  studyGoal,
+  todayMinutes,
+  todayWords,
+  streakDays,
+  onStudyGoalChange,
   onClose,
   onDontShowAgain,
 }) => {
@@ -142,6 +152,49 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({
               URL import works for most pages, but some sites block automated readers. Open the page in a normal tab,
               complete any checks, then paste text if needed.
             </p>
+          </section>
+
+          <section className="rounded-xl border border-text-primary/10 bg-black/15 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-bold text-text-primary">Study Goal</div>
+                <p className="mt-1 text-xs text-text-secondary">
+                  {streakDays} day streak • Today {todayMinutes}m / {todayWords} words
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onStudyGoalChange({ type: 'minutes', value: studyGoal.value })}
+                  className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest border transition-colors ${
+                    studyGoal.type === 'minutes'
+                      ? 'bg-accent-red/15 border-accent-red/30 text-text-primary'
+                      : 'bg-text-primary/5 border-text-primary/10 text-text-secondary'
+                  }`}
+                >
+                  Minutes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onStudyGoalChange({ type: 'words', value: studyGoal.value })}
+                  className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest border transition-colors ${
+                    studyGoal.type === 'words'
+                      ? 'bg-accent-red/15 border-accent-red/30 text-text-primary'
+                      : 'bg-text-primary/5 border-text-primary/10 text-text-secondary'
+                  }`}
+                >
+                  Words
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  value={studyGoal.value}
+                  onChange={(e) => onStudyGoalChange({ type: studyGoal.type, value: Math.max(1, Number(e.target.value) || 1) })}
+                  className="w-20 rounded-md border border-text-primary/10 bg-black/20 px-2 py-1 text-xs text-text-primary focus:border-accent-red/60 focus:outline-none"
+                  aria-label="Goal value"
+                />
+              </div>
+            </div>
           </section>
         </div>
 

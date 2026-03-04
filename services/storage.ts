@@ -1,4 +1,4 @@
-import { Book, BookSettings } from '../types';
+import { Book, BookSettings, DailyGoal, Note, ReviewItem, SessionSummary } from '../types';
 
 const STORAGE_KEY = 'focus_reader_library';
 const PREFS_KEY = 'focus_reader_prefs';
@@ -6,6 +6,44 @@ const CUSTOM_THEMES_KEY = 'focus_reader_custom_themes';
 const SELECTED_THEME_KEY = 'focus_reader_selected_theme';
 const HELP_PREFS_KEY = 'focus_reader_help_prefs';
 const BIONIC_HINT_KEY = 'focus_reader_seen_bionic_hint';
+const SESSION_SUMMARIES_KEY = 'focus_reader_session_summaries';
+const STUDY_GOAL_KEY = 'focus_reader_study_goal';
+
+const DEFAULT_DAILY_GOAL: DailyGoal = {
+  type: 'minutes',
+  value: 20,
+};
+
+const parseJson = <T,>(key: string, fallback: T): T => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch (e) {
+    console.error(`Failed to parse ${key}`, e);
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+    return fallback;
+  }
+};
+
+const normalizeBook = (book: Book): Book => {
+  const settings = book.settings || {};
+  const normalizedSettings: BookSettings = {
+    ...settings,
+    bookmarks: Array.isArray(settings.bookmarks) ? settings.bookmarks : [],
+    notes: Array.isArray(settings.notes) ? settings.notes : [],
+    reviewQueue: Array.isArray(settings.reviewQueue) ? settings.reviewQueue : [],
+  };
+
+  return {
+    ...book,
+    settings: normalizedSettings,
+  };
+};
 
 export const saveBook = (book: Book): void => {
   const library = getLibrary();
@@ -54,19 +92,8 @@ export const updateBookTitle = (id: string, title: string): void => {
 };
 
 export const getLibrary = (): Book[] => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    console.error("Failed to parse library", e);
-    // Corrupted storage should not brick the app; reset.
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-    return [];
-  }
+  const parsed = parseJson<Book[]>(STORAGE_KEY, []);
+  return parsed.map(normalizeBook);
 };
 
 export const deleteBook = (id: string): Book[] => {
@@ -87,4 +114,52 @@ export const clearAllData = (): void => {
   localStorage.removeItem(SELECTED_THEME_KEY);
   localStorage.removeItem(HELP_PREFS_KEY);
   localStorage.removeItem(BIONIC_HINT_KEY);
+  localStorage.removeItem(SESSION_SUMMARIES_KEY);
+  localStorage.removeItem(STUDY_GOAL_KEY);
+};
+
+export const getBookNotes = (book: Book | null): Note[] => {
+  if (!book?.settings?.notes || !Array.isArray(book.settings.notes)) return [];
+  return book.settings.notes;
+};
+
+export const getBookReviewQueue = (book: Book | null): ReviewItem[] => {
+  if (!book?.settings?.reviewQueue || !Array.isArray(book.settings.reviewQueue)) return [];
+  return book.settings.reviewQueue;
+};
+
+export const getAllSessionSummaries = (): SessionSummary[] => {
+  const parsed = parseJson<SessionSummary[]>(SESSION_SUMMARIES_KEY, []);
+  return parsed
+    .filter((item) => item && typeof item.bookId === 'string')
+    .sort((a, b) => b.endedAt - a.endedAt);
+};
+
+export const getSessionSummariesForBook = (bookId: string): SessionSummary[] => {
+  return getAllSessionSummaries().filter((s) => s.bookId === bookId);
+};
+
+export const appendSessionSummary = (summary: SessionSummary): void => {
+  const list = getAllSessionSummaries();
+  const next = [summary, ...list].slice(0, 500);
+  localStorage.setItem(SESSION_SUMMARIES_KEY, JSON.stringify(next));
+};
+
+export const getStudyGoal = (): DailyGoal => {
+  const parsed = parseJson<Partial<DailyGoal>>(STUDY_GOAL_KEY, DEFAULT_DAILY_GOAL);
+  const type = parsed?.type === 'words' ? 'words' : 'minutes';
+  const value = Number(parsed?.value);
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_DAILY_GOAL;
+  return {
+    type,
+    value: Math.round(value),
+  };
+};
+
+export const saveStudyGoal = (goal: DailyGoal): void => {
+  const safe: DailyGoal = {
+    type: goal.type === 'words' ? 'words' : 'minutes',
+    value: Math.max(1, Math.round(goal.value)),
+  };
+  localStorage.setItem(STUDY_GOAL_KEY, JSON.stringify(safe));
 };

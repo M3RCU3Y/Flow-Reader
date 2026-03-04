@@ -230,6 +230,8 @@ export const extractTextFromPDF = async (file: File, opts?: ExtractPdfOptions): 
     if (signal?.aborted) throw new PdfImportError('CANCELLED', 'Import cancelled');
   };
 
+  let ocrWorker: any | null = null;
+
   try {
     throwIfAborted();
     const arrayBuffer = await file.arrayBuffer();
@@ -259,8 +261,6 @@ export const extractTextFromPDF = async (file: File, opts?: ExtractPdfOptions): 
 
     emitProgress(opts, { stage: 'loading', page: 0, numPages, message: `Loaded (${numPages} pages)` });
 
-    // Lazy-load OCR only if needed.
-    let ocrWorker: any | null = null;
     let lastOcrUpdateTs = 0;
     let lastOcrPercent = -1;
 
@@ -348,6 +348,20 @@ export const extractTextFromPDF = async (file: File, opts?: ExtractPdfOptions): 
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
+    emitProgress(opts, { stage: 'cleaning', page: numPages, numPages, message: 'Done' });
+    return combined;
+  } catch (err) {
+    if (signal?.aborted) throw new PdfImportError('CANCELLED', 'Import cancelled', err);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new PdfImportError('CANCELLED', 'Import cancelled', err);
+    }
+    if (typeof err === 'object' && err !== null && 'name' in err && (err as { name?: string }).name === 'AbortError') {
+      throw new PdfImportError('CANCELLED', 'Import cancelled', err);
+    }
+    if (err instanceof PdfImportError) throw err;
+    console.error('Error parsing PDF:', err);
+    throw new PdfImportError('FAILED', 'Failed to extract text from PDF', err);
+  } finally {
     if (ocrWorker?.terminate) {
       try {
         await ocrWorker.terminate();
@@ -355,13 +369,5 @@ export const extractTextFromPDF = async (file: File, opts?: ExtractPdfOptions): 
         // ignore
       }
     }
-
-    emitProgress(opts, { stage: 'cleaning', page: numPages, numPages, message: 'Done' });
-    return combined;
-  } catch (err) {
-    if (err instanceof PdfImportError) throw err;
-    console.error('Error parsing PDF:', err);
-    throw new PdfImportError('FAILED', 'Failed to extract text from PDF', err);
   }
 };
-

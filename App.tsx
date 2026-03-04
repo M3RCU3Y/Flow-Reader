@@ -1,7 +1,20 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Book, BookSettings, Bookmark, ReaderMode, ReaderPreferences } from './types';
+import { Book, BookSettings, Bookmark, DailyGoal, Note, ReaderMode, ReaderPreferences, ReviewItem, SessionSummary } from './types';
 import { useRSVP } from './hooks/useRSVP';
-import { saveBook, getLibrary, deleteBook, updateBookProgress, clearLibrary, clearAllData, updateBookSettings, updateBookTitle } from './services/storage';
+import {
+  appendSessionSummary,
+  deleteBook,
+  getAllSessionSummaries,
+  getLibrary,
+  getSessionSummariesForBook,
+  getStudyGoal,
+  saveBook,
+  saveStudyGoal,
+  clearAllData,
+  updateBookProgress,
+  updateBookSettings,
+  updateBookTitle
+} from './services/storage';
 import { getReaderPreferences, saveReaderPreferences } from './services/preferences';
 import { ControlCenter } from './components/ControlCenter';
 import { TextInput } from './components/TextInput';
@@ -13,9 +26,26 @@ import { BionicFlowReader } from './components/BionicFlowReader';
 import { BionicControls } from './components/BionicControls';
 import { ThemeSelector } from './components/ThemeSelector';
 import { HelpOverlay } from './components/HelpOverlay';
-import { BookMarked, Trash2, Menu, PanelLeftClose, Download } from 'lucide-react';
+import { BookMarked, Trash2, Menu, PanelLeftClose, Download, Brain } from 'lucide-react';
 import { BookmarksPanel } from './components/BookmarksPanel';
 import { LibrarySortMenu } from './components/LibrarySortMenu';
+
+const REVIEW_WINDOW_BEFORE = 6;
+const REVIEW_WINDOW_AFTER = 14;
+
+const dayKeyFromTs = (ts: number) => {
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const addDays = (key: string, delta: number) => {
+  const d = new Date(`${key}T00:00:00`);
+  d.setDate(d.getDate() + delta);
+  return dayKeyFromTs(d.getTime());
+};
 
 export default function App() {
   const [activeBook, setActiveBook] = useState<Book | null>(null);
@@ -64,6 +94,30 @@ export default function App() {
   const [showBionicHint, setShowBionicHint] = useState(false);
   const [isBionicHintFading, setIsBionicHintFading] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
+  const [studyGoal, setStudyGoal] = useState<DailyGoal>(() => getStudyGoal());
+  const [isSessionRecapOpen, setIsSessionRecapOpen] = useState(false);
+  const [lastSessionSummary, setLastSessionSummary] = useState<SessionSummary | null>(null);
+  const [sessionWordsRead, setSessionWordsRead] = useState(0);
+  const [sessionRewinds, setSessionRewinds] = useState(0);
+  const [sessionBookmarksAdded, setSessionBookmarksAdded] = useState(0);
+  const [sessionNotesAdded, setSessionNotesAdded] = useState(0);
+  const [isReviewMode, setIsReviewMode] = useState(false);
+  const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>([]);
+  const [reviewCursor, setReviewCursor] = useState(0);
+  const [resumePromptBook, setResumePromptBook] = useState<Book | null>(null);
+  const [pendingReviewStart, setPendingReviewStart] = useState(false);
+  const [sprintDurationMin, setSprintDurationMin] = useState<number | null>(null);
+  const [sprintEndsAt, setSprintEndsAt] = useState<number | null>(null);
+  const [showShortcutCoachmark, setShowShortcutCoachmark] = useState(false);
+  const [showLongPressCoachmark, setShowLongPressCoachmark] = useState(false);
+  const reviewWpmRestoreRef = useRef<number | null>(null);
+  const sessionStartRef = useRef<number | null>(null);
+  const sessionWpmSamplesRef = useRef<number[]>([]);
+  const hardSegmentIndexesRef = useRef<number[]>([]);
+  const prevPlayingRef = useRef(false);
+  const prevIndexRef = useRef(0);
+  const longPressTimerRef = useRef<number | null>(null);
+  const latestRsvpIndexRef = useRef(0);
 
   const initialPrefs = useMemo<ReaderPreferences>(() => getReaderPreferences(), []);
   const [readerSettings, setReaderSettings] = useState<ReaderPreferences>(initialPrefs);
@@ -90,6 +144,25 @@ export default function App() {
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const seenDesktop = localStorage.getItem('focus_reader_seen_shortcuts_tip') === 'true';
+      const seenTouch = localStorage.getItem('focus_reader_seen_longpress_tip') === 'true';
+      if (!seenDesktop) {
+        setShowShortcutCoachmark(true);
+        window.setTimeout(() => setShowShortcutCoachmark(false), 5200);
+        localStorage.setItem('focus_reader_seen_shortcuts_tip', 'true');
+      }
+      if (!seenTouch && isNarrowViewport) {
+        setShowLongPressCoachmark(true);
+        window.setTimeout(() => setShowLongPressCoachmark(false), 5200);
+        localStorage.setItem('focus_reader_seen_longpress_tip', 'true');
+      }
+    } catch {
+      // ignore
+    }
+  }, [isNarrowViewport]);
 
   const setHelpSuppressed = (next: boolean) => {
     setSuppressHelp(next);
@@ -138,7 +211,11 @@ export default function App() {
 
   const showDashboardHamburger = !isSidebarOpen && !activeBook;
 
-  const handleStartNew = (title: string, text: string) => {
+  const handleStartNew = (
+    title: string,
+    text: string,
+    sourceMeta?: { sourceType: 'paste' | 'pdf' | 'docx' | 'url'; sourceUrl?: string }
+  ) => {
     const words = text.trim().split(/\s+/).filter(w => w.length > 0);
     const newBook: Book = {
       id: Date.now().toString(),
@@ -148,6 +225,7 @@ export default function App() {
       progressIndex: 0,
       createdAt: Date.now(),
       lastReadAt: Date.now(),
+      settings: sourceMeta ? { sourceMeta } : undefined,
     };
     saveBook(newBook);
     setLibrary(getLibrary());
@@ -168,16 +246,48 @@ export default function App() {
       clearAllData();
       setLibrary([]);
       setActiveBook(null);
+      setStudyGoal(getStudyGoal());
+      setLastSessionSummary(null);
+      setIsSessionRecapOpen(false);
     }
   };
 
-  const handleSelectBook = (book: Book) => {
-    setActiveBook(book);
+  const openBook = (book: Book, opts?: { restart?: boolean; review?: boolean }) => {
+    const shouldRestart = Boolean(opts?.restart);
+    let nextBook = book;
+    if (shouldRestart) {
+      updateBookProgress(book.id, 0);
+      nextBook = {
+        ...book,
+        progressIndex: 0,
+      };
+      setLibrary(getLibrary());
+    }
+    setActiveBook(nextBook);
+    setResumePromptBook(null);
+    if (opts?.review) {
+      setPendingReviewStart(true);
+    }
     // Enter Focus Mode
     setIsSidebarOpen(false);
   };
 
+  const handleSelectBook = (book: Book) => {
+    const hasResumeChoices =
+      book.progressIndex > 0 ||
+      (book.settings?.bookmarks?.length || 0) > 0 ||
+      (book.settings?.notes?.length || 0) > 0;
+    if (hasResumeChoices) {
+      setResumePromptBook(book);
+      return;
+    }
+    openBook(book);
+  };
+
   const handleExitReader = () => {
+    finalizeSession();
+    if (rsvp.isPlaying) rsvp.togglePlay();
+    exitReviewMode();
     if (activeBook) {
       updateBookProgress(activeBook.id, rsvp.index);
       setLibrary(getLibrary());
@@ -222,6 +332,10 @@ export default function App() {
     return (activeBook?.settings?.bookmarks || []).slice();
   };
 
+  const getActiveNotes = (): Note[] => {
+    return (activeBook?.settings?.notes || []).slice();
+  };
+
   const saveActiveBookmarks = (next: Bookmark[]) => {
     if (!activeBook) return;
     updateBookSettings(activeBook.id, { bookmarks: next });
@@ -232,6 +346,22 @@ export default function App() {
         settings: {
           ...(prev.settings || {}),
           bookmarks: next,
+        },
+      };
+    });
+    setLibrary(getLibrary());
+  };
+
+  const saveActiveNotes = (next: Note[]) => {
+    if (!activeBook) return;
+    updateBookSettings(activeBook.id, { notes: next });
+    setActiveBook((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        settings: {
+          ...(prev.settings || {}),
+          notes: next,
         },
       };
     });
@@ -250,12 +380,113 @@ export default function App() {
       createdAt: Date.now(),
     };
     saveActiveBookmarks([bm, ...existing].slice(0, 200));
+    setSessionBookmarksAdded((prev) => prev + 1);
   };
 
   const deleteBookmark = (id: string) => {
     const existing = getActiveBookmarks();
     saveActiveBookmarks(existing.filter((b) => b.id !== id));
   };
+
+  const addNote = (text: string) => {
+    if (!activeBook) return;
+    const nextIndex = rsvp.index;
+    const existing = getActiveNotes();
+    const note: Note = {
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      index: nextIndex,
+      text,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    saveActiveNotes([note, ...existing].slice(0, 300));
+    setSessionNotesAdded((prev) => prev + 1);
+  };
+
+  const updateNote = (id: string, text: string) => {
+    const existing = getActiveNotes();
+    saveActiveNotes(
+      existing.map((note) =>
+        note.id === id
+          ? {
+              ...note,
+              text,
+              updatedAt: Date.now(),
+            }
+          : note
+      )
+    );
+  };
+
+  const deleteNote = (id: string) => {
+    const existing = getActiveNotes();
+    saveActiveNotes(existing.filter((note) => note.id !== id));
+  };
+
+  const buildReviewQueue = (): ReviewItem[] => {
+    const bookmarks = getActiveBookmarks().map((b) => ({
+      id: `bm_${b.id}`,
+      index: b.index,
+      reason: 'bookmark' as const,
+    }));
+    const notes = getActiveNotes().map((n) => ({
+      id: `note_${n.id}`,
+      index: n.index,
+      reason: 'note' as const,
+    }));
+    const rewinds = hardSegmentIndexesRef.current.slice(-20).map((idx, i) => ({
+      id: `rew_${idx}_${i}`,
+      index: idx,
+      reason: 'rewind' as const,
+    }));
+    const merged = [...notes, ...bookmarks, ...rewinds];
+    const uniqueByIndex = new Map<number, ReviewItem>();
+    for (const item of merged) {
+      if (!uniqueByIndex.has(item.index)) {
+        uniqueByIndex.set(item.index, item);
+      }
+    }
+    return [...uniqueByIndex.values()].sort((a, b) => a.index - b.index);
+  };
+
+  const startReviewMode = () => {
+    if (!activeBook) return;
+    const queue = buildReviewQueue();
+    if (!queue.length) return;
+    if (requestedMode !== 'rsvp') {
+      updateReaderSettings({ lastMode: 'rsvp' }, { mode: 'rsvp' });
+    }
+    setReviewQueue(queue);
+    setReviewCursor(0);
+    setIsReviewMode(true);
+    updateBookSettings(activeBook.id, { reviewQueue: queue });
+    setActiveBook((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        settings: {
+          ...(prev.settings || {}),
+          reviewQueue: queue,
+        },
+      };
+    });
+  };
+
+  const exitReviewMode = () => {
+    setIsReviewMode(false);
+    setReviewQueue([]);
+    setReviewCursor(0);
+    if (reviewWpmRestoreRef.current != null) {
+      rsvp.setWpm(reviewWpmRestoreRef.current);
+      reviewWpmRestoreRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingReviewStart || !activeBook) return;
+    startReviewMode();
+    setPendingReviewStart(false);
+  }, [pendingReviewStart, activeBook?.id]);
 
   const jumpToBookmark = (idx: number) => {
     rsvp.seek(idx);
@@ -331,6 +562,58 @@ export default function App() {
     return sorted;
   }, [library, libraryQuery, librarySort]);
 
+  const todayProgress = useMemo(() => {
+    const today = dayKeyFromTs(Date.now());
+    const summaries = activeBook ? getSessionSummariesForBook(activeBook.id) : [];
+    const allSummaries = getAllSessionSummaries();
+    const allToday = allSummaries.filter((s) => dayKeyFromTs(s.endedAt) === today);
+    const minutes = allToday.reduce((acc, s) => acc + (s.endedAt - s.startedAt) / 60000, 0);
+    const words = allToday.reduce((acc, s) => acc + s.wordsRead, 0);
+    const goalMet =
+      studyGoal.type === 'minutes'
+        ? minutes >= studyGoal.value
+        : words >= studyGoal.value;
+
+    const byDay = new Map<string, { minutes: number; words: number }>();
+    for (const s of allSummaries) {
+      const key = dayKeyFromTs(s.endedAt);
+      const entry = byDay.get(key) || { minutes: 0, words: 0 };
+      entry.minutes += (s.endedAt - s.startedAt) / 60000;
+      entry.words += s.wordsRead;
+      byDay.set(key, entry);
+    }
+    let streak = 0;
+    let cursor = today;
+    while (true) {
+      const entry = byDay.get(cursor);
+      if (!entry) break;
+      const met = studyGoal.type === 'minutes' ? entry.minutes >= studyGoal.value : entry.words >= studyGoal.value;
+      if (!met) break;
+      streak += 1;
+      cursor = addDays(cursor, -1);
+    }
+
+    return {
+      minutes: Math.round(minutes),
+      words,
+      goalMet,
+      streak,
+      activeBookSessions: summaries.length,
+    };
+  }, [activeBook?.id, studyGoal.type, studyGoal.value, lastSessionSummary?.id]);
+
+  useEffect(() => {
+    saveStudyGoal(studyGoal);
+    if (activeBook) {
+      updateBookSettings(activeBook.id, {
+        goalsSnapshot: {
+          dailyGoalType: studyGoal.type,
+          dailyGoalValue: studyGoal.value,
+        },
+      });
+    }
+  }, [studyGoal]);
+
   const headerEngagedRef = useRef(false);
   const footerEngagedRef = useRef(false);
   const themeEngagedRef = useRef(false);
@@ -365,6 +648,7 @@ export default function App() {
   const isHeaderVisible = !activeBook ? true : isBionicMode ? isHeaderVisibleBionic : isUiVisible;
   const isFooterVisible = !activeBook ? true : isBionicMode ? isFooterVisibleBionic : isUiVisible;
   const isThemeVisible = !activeBook || (isBionicMode ? isFooterVisibleBionic : isUiVisible) || isThemeEngaged;
+  const currentReviewItem = isReviewMode ? reviewQueue[reviewCursor] : null;
 
   const applyBookSettings = (updates: Partial<BookSettings>) => {
     if (!activeBook) return;
@@ -412,21 +696,41 @@ export default function App() {
     updateReaderSettings({ lastMode: nextMode }, { mode: nextMode });
   };
 
+  useEffect(() => {
+    latestRsvpIndexRef.current = rsvp.index;
+  }, [rsvp.index]);
+
   // Persist progress periodically
   useEffect(() => {
-    if (activeBook) {
-      const interval = setInterval(() => {
-        updateBookProgress(activeBook.id, rsvp.index);
-        setLibrary(getLibrary()); 
-      }, 2000);
-      return () => clearInterval(interval);
-    }
-  }, [activeBook, rsvp.index]);
+    if (!activeBook) return;
+    const bookId = activeBook.id;
+    const persistProgress = () => {
+      updateBookProgress(bookId, latestRsvpIndexRef.current);
+    };
+    const interval = window.setInterval(persistProgress, 2000);
+    return () => {
+      window.clearInterval(interval);
+      persistProgress();
+      setLibrary(getLibrary());
+    };
+  }, [activeBook?.id]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!activeBook || mode === 'bionic_flow') return;
+      if (!activeBook) return;
+      if (e.code === 'KeyN') {
+        e.preventDefault();
+        addNote('Quick note');
+        setIsBookmarksOpen(true);
+        return;
+      }
+      if (e.code === 'KeyB') {
+        e.preventDefault();
+        addBookmark();
+        return;
+      }
+      if (mode === 'bionic_flow') return;
       if (e.code === 'Space') {
         e.preventDefault();
         rsvp.togglePlay();
@@ -443,13 +747,143 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeBook, mode, rsvp]);
+  }, [activeBook, mode, rsvp, addBookmark, addNote]);
 
   useEffect(() => {
     if (mode === 'bionic_flow' && rsvp.isPlaying) {
       rsvp.togglePlay();
     }
   }, [mode, rsvp]);
+
+  useEffect(() => {
+    if (!activeBook) {
+      prevIndexRef.current = 0;
+      prevPlayingRef.current = false;
+      return;
+    }
+    prevIndexRef.current = rsvp.index;
+  }, [activeBook?.id]);
+
+  useEffect(() => {
+    if (!activeBook) return;
+    const prev = prevIndexRef.current;
+    const next = rsvp.index;
+    const delta = next - prev;
+    if (delta > 0 && rsvp.isPlaying) {
+      setSessionWordsRead((count) => count + delta);
+      sessionWpmSamplesRef.current.push(rsvp.wpm);
+      if (sessionWpmSamplesRef.current.length > 600) {
+        sessionWpmSamplesRef.current.shift();
+      }
+    }
+    if (delta < 0) {
+      const rewindBy = Math.abs(delta);
+      if (rewindBy >= 3) {
+        setSessionRewinds((count) => count + 1);
+        hardSegmentIndexesRef.current.push(next);
+        if (hardSegmentIndexesRef.current.length > 80) {
+          hardSegmentIndexesRef.current.shift();
+        }
+      }
+    }
+    prevIndexRef.current = next;
+  }, [activeBook?.id, rsvp.index, rsvp.isPlaying, rsvp.wpm]);
+
+  const finalizeSession = () => {
+    if (!activeBook || !sessionStartRef.current) return;
+    const endedAt = Date.now();
+    const startedAt = sessionStartRef.current;
+    const durationMs = Math.max(0, endedAt - startedAt);
+    if (durationMs < 1200 && sessionWordsRead === 0 && sessionBookmarksAdded === 0 && sessionNotesAdded === 0) {
+      sessionStartRef.current = null;
+      return;
+    }
+    const samples = sessionWpmSamplesRef.current;
+    const avgWpm = samples.length
+      ? Math.round(samples.reduce((acc, item) => acc + item, 0) / samples.length)
+      : rsvp.wpm;
+    const summary: SessionSummary = {
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      bookId: activeBook.id,
+      startedAt,
+      endedAt,
+      wordsRead: sessionWordsRead,
+      avgWpm,
+      rewinds: sessionRewinds,
+      bookmarksAdded: sessionBookmarksAdded,
+      notesAdded: sessionNotesAdded,
+    };
+    appendSessionSummary(summary);
+    updateBookSettings(activeBook.id, { lastSessionSummary: summary });
+    setActiveBook((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        settings: {
+          ...(prev.settings || {}),
+          lastSessionSummary: summary,
+        },
+      };
+    });
+    setLibrary(getLibrary());
+    setLastSessionSummary(summary);
+    setIsSessionRecapOpen(true);
+    setSessionWordsRead(0);
+    setSessionRewinds(0);
+    setSessionBookmarksAdded(0);
+    setSessionNotesAdded(0);
+    sessionWpmSamplesRef.current = [];
+    sessionStartRef.current = null;
+  };
+
+  useEffect(() => {
+    if (!activeBook) return;
+    const wasPlaying = prevPlayingRef.current;
+    const isPlaying = rsvp.isPlaying;
+    if (!wasPlaying && isPlaying) {
+      sessionStartRef.current = Date.now();
+      sessionWpmSamplesRef.current = [rsvp.wpm];
+    }
+    if (wasPlaying && !isPlaying) {
+      finalizeSession();
+    }
+    prevPlayingRef.current = isPlaying;
+  }, [activeBook?.id, rsvp.isPlaying]);
+
+  useEffect(() => {
+    if (!activeBook) return;
+    const atEnd = rsvp.totalWords > 0 && rsvp.index >= rsvp.totalWords - 1;
+    if (atEnd && !rsvp.isPlaying) {
+      finalizeSession();
+    }
+  }, [activeBook?.id, rsvp.index, rsvp.totalWords, rsvp.isPlaying]);
+
+  useEffect(() => {
+    if (!isReviewMode || !activeBook) return;
+    const queue = reviewQueue.length ? reviewQueue : (activeBook.settings?.reviewQueue || []);
+    if (!queue.length) {
+      exitReviewMode();
+      return;
+    }
+    if (reviewWpmRestoreRef.current == null) {
+      reviewWpmRestoreRef.current = rsvp.wpm;
+      rsvp.setWpm(Math.min(280, rsvp.wpm));
+    }
+    const item = queue[Math.min(reviewCursor, queue.length - 1)];
+    if (!item) return;
+    const start = Math.max(0, item.index - REVIEW_WINDOW_BEFORE);
+    rsvp.seek(start);
+    if (rsvp.isPlaying) rsvp.togglePlay();
+  }, [isReviewMode, reviewCursor, reviewQueue, activeBook?.id]);
+
+  useEffect(() => {
+    if (!isReviewMode || !rsvp.isPlaying) return;
+    const item = reviewQueue[reviewCursor];
+    if (!item) return;
+    if (rsvp.index >= item.index + REVIEW_WINDOW_AFTER) {
+      rsvp.togglePlay();
+    }
+  }, [isReviewMode, reviewQueue, reviewCursor, rsvp.index, rsvp.isPlaying]);
 
   const clearBionicHintTimers = () => {
     if (bionicHintFadeRef.current) {
@@ -920,6 +1354,14 @@ export default function App() {
     setReaderSettings(nextSettings);
     setTitleDraft(activeBook.title);
     setIsEditingTitle(false);
+    setSessionWordsRead(0);
+    setSessionRewinds(0);
+    setSessionBookmarksAdded(0);
+    setSessionNotesAdded(0);
+    sessionStartRef.current = null;
+    sessionWpmSamplesRef.current = [];
+    prevPlayingRef.current = false;
+    setIsSessionRecapOpen(false);
   }, [activeBook?.id]);
 
   useEffect(() => {
@@ -987,6 +1429,29 @@ export default function App() {
     }, 400);
   };
 
+  const startSprint = (minutes: number) => {
+    const duration = Math.max(1, minutes);
+    setSprintDurationMin(duration);
+    setSprintEndsAt(Date.now() + duration * 60 * 1000);
+  };
+
+  const stopSprint = () => {
+    setSprintDurationMin(null);
+    setSprintEndsAt(null);
+  };
+
+  useEffect(() => {
+    if (!sprintEndsAt) return;
+    const timer = window.setInterval(() => {
+      if (Date.now() < sprintEndsAt) return;
+      stopSprint();
+      if (navigator.vibrate) {
+        navigator.vibrate(120);
+      }
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [sprintEndsAt]);
+
   useEffect(() => {
     // When the library is open as a drawer, prevent background scroll (especially iOS).
     if (!isLibraryDrawer) return;
@@ -997,6 +1462,34 @@ export default function App() {
       document.body.style.overflow = prevOverflow;
     };
   }, [isLibraryDrawer, isSidebarOpen]);
+
+  const handleReaderTouchStart = () => {
+    if (!activeBook) return;
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+    }
+    longPressTimerRef.current = window.setTimeout(() => {
+      addNote('Mobile quick note');
+      setIsBookmarksOpen(true);
+      longPressTimerRef.current = null;
+    }, 620);
+  };
+
+  const handleReaderTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] bg-app-bg text-text-primary overflow-hidden font-ui selection:bg-accent-red selection:text-text-primary">
@@ -1054,6 +1547,32 @@ export default function App() {
                className="mt-3 w-full rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
                aria-label="Search library"
              />
+             <div className="mt-3 rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2">
+               <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-text-secondary font-bold">
+                 <span>Daily Goal</span>
+                 <span>{todayProgress.streak}d streak</span>
+               </div>
+               <div className="mt-1 text-xs text-text-secondary">
+                 {studyGoal.type === 'minutes'
+                   ? `${todayProgress.minutes}/${studyGoal.value} min`
+                   : `${todayProgress.words}/${studyGoal.value} words`}
+               </div>
+               <div className="mt-2 h-1.5 rounded-full bg-text-primary/10 overflow-hidden">
+                 <div
+                   className="h-full bg-progress rounded-full transition-all duration-300"
+                   style={{
+                     width: `${Math.min(
+                       100,
+                       Math.round(
+                         ((studyGoal.type === 'minutes' ? todayProgress.minutes : todayProgress.words) /
+                           Math.max(1, studyGoal.value)) *
+                           100
+                       )
+                     )}%`,
+                   }}
+                 />
+               </div>
+             </div>
            </div>
            <Library 
              books={visibleLibrary} 
@@ -1210,6 +1729,15 @@ export default function App() {
 	                     </button>
 	                     <button
 	                       type="button"
+	                       onClick={startReviewMode}
+	                       className="w-9 h-9 flex items-center justify-center rounded-lg bg-black/30 border border-text-primary/5 text-text-secondary hover:text-text-primary hover:border-text-primary/20 transition-colors"
+	                       aria-label="Review mode"
+	                       title="Review mode"
+	                     >
+	                       <Brain className="w-4 h-4" />
+	                     </button>
+	                     <button
+	                       type="button"
 	                       onClick={() => setIsBookmarksOpen(true)}
 	                       className="w-9 h-9 flex items-center justify-center rounded-lg bg-black/30 border border-text-primary/5 text-text-secondary hover:text-text-primary hover:border-text-primary/20 transition-colors"
 	                       aria-label="Bookmarks"
@@ -1231,8 +1759,49 @@ export default function App() {
 	                </div>
 	              </div>
 
+              {isReviewMode && currentReviewItem && (
+                <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20">
+                  <div className="flex items-center gap-2 rounded-full border border-accent-red/30 bg-panel-bg/80 px-3 py-2 backdrop-blur-md shadow-xl">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                      Review {reviewCursor + 1}/{reviewQueue.length}
+                    </span>
+                    <span className="text-[11px] text-text-primary/90">
+                      {currentReviewItem.reason}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setReviewCursor((prev) => Math.max(0, prev - 1))}
+                      className="px-2 py-1 rounded-full text-[10px] font-semibold text-text-secondary hover:text-text-primary hover:bg-text-primary/10 transition-colors"
+                      disabled={reviewCursor === 0}
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReviewCursor((prev) => Math.min(reviewQueue.length - 1, prev + 1))}
+                      className="px-2 py-1 rounded-full text-[10px] font-semibold text-text-secondary hover:text-text-primary hover:bg-text-primary/10 transition-colors"
+                      disabled={reviewCursor >= reviewQueue.length - 1}
+                    >
+                      Next
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exitReviewMode}
+                      className="px-2 py-1 rounded-full text-[10px] font-semibold text-text-secondary hover:text-text-primary hover:bg-text-primary/10 transition-colors"
+                    >
+                      Exit
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Reader Area */}
-	              <div className="flex-1 w-full min-h-0 relative z-10">
+	              <div
+                  className="flex-1 w-full min-h-0 relative z-10"
+                  onTouchStart={handleReaderTouchStart}
+                  onTouchEnd={handleReaderTouchEnd}
+                  onTouchCancel={handleReaderTouchEnd}
+                >
 	                <div
 	                  key={mode}
 		                  className={`h-full w-full animate-in fade-in duration-500 ${mode === 'bionic_flow' ? '' : 'flex items-center justify-center'} ${
@@ -1314,6 +1883,10 @@ export default function App() {
 	                          comfortModeEnabled={readerSettings.comfortModeEnabled ?? true}
 	                          onSmartTimingChange={handleSmartTimingChange}
 	                          onComfortModeChange={handleComfortModeChange}
+                            sprintDurationMin={sprintDurationMin}
+                            sprintEndsAt={sprintEndsAt}
+                            onStartSprint={startSprint}
+                            onStopSprint={stopSprint}
 	                        />
 	                      )}
                     </div>
@@ -1348,6 +1921,10 @@ export default function App() {
 	                        comfortModeEnabled={readerSettings.comfortModeEnabled ?? true}
 	                        onSmartTimingChange={handleSmartTimingChange}
 	                        onComfortModeChange={handleComfortModeChange}
+                          sprintDurationMin={sprintDurationMin}
+                          sprintEndsAt={sprintEndsAt}
+                          onStartSprint={startSprint}
+                          onStopSprint={stopSprint}
 	                      />
 	                    )}
                   </div>
@@ -1392,6 +1969,11 @@ export default function App() {
           isOpen={isHelpOpen}
           mode={mode}
           hasActiveBook={Boolean(activeBook)}
+          studyGoal={studyGoal}
+          todayMinutes={todayProgress.minutes}
+          todayWords={todayProgress.words}
+          streakDays={todayProgress.streak}
+          onStudyGoalChange={setStudyGoal}
           onClose={() => setIsHelpOpen(false)}
           onDontShowAgain={() => setHelpSuppressed(true)}
         />
@@ -1399,12 +1981,126 @@ export default function App() {
         <BookmarksPanel
           isOpen={Boolean(activeBook) && isBookmarksOpen}
           bookmarks={getActiveBookmarks()}
+          notes={getActiveNotes()}
           onAdd={addBookmark}
+          onAddNote={addNote}
+          onUpdateNote={updateNote}
+          onDeleteNote={deleteNote}
           onJump={jumpToBookmark}
           onDelete={deleteBookmark}
+          onStartReview={startReviewMode}
+          reviewItemCount={buildReviewQueue().length}
           onClose={() => setIsBookmarksOpen(false)}
           getSnippet={getBookmarkSnippet}
         />
+
+        {showShortcutCoachmark && activeBook && !isNarrowViewport && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] px-4 py-2 rounded-full bg-panel-bg/85 border border-text-primary/10 text-xs text-text-primary shadow-2xl">
+            Shortcut tip: press <span className="font-bold">N</span> for note, <span className="font-bold">B</span> for bookmark.
+          </div>
+        )}
+
+        {showLongPressCoachmark && activeBook && isNarrowViewport && (
+          <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-[90] px-4 py-2 rounded-full bg-panel-bg/85 border border-text-primary/10 text-xs text-text-primary shadow-2xl">
+            Mobile tip: long-press while reading to save a quick note.
+          </div>
+        )}
+
+        {isSessionRecapOpen && lastSessionSummary && (
+          <div className="fixed inset-0 z-[95] flex items-center justify-center p-6">
+            <button
+              type="button"
+              onClick={() => setIsSessionRecapOpen(false)}
+              className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+              aria-label="Close session recap"
+            />
+            <div className="relative w-full max-w-md rounded-2xl border border-text-primary/10 bg-panel-bg p-5 shadow-2xl">
+              <h3 className="text-xl font-header font-bold text-text-primary">Session recap</h3>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg border border-text-primary/10 bg-black/10 p-3">
+                  <div className="text-xs uppercase tracking-widest text-text-secondary">Words read</div>
+                  <div className="mt-1 font-semibold text-text-primary">{lastSessionSummary.wordsRead}</div>
+                </div>
+                <div className="rounded-lg border border-text-primary/10 bg-black/10 p-3">
+                  <div className="text-xs uppercase tracking-widest text-text-secondary">Avg WPM</div>
+                  <div className="mt-1 font-semibold text-text-primary">{lastSessionSummary.avgWpm}</div>
+                </div>
+                <div className="rounded-lg border border-text-primary/10 bg-black/10 p-3">
+                  <div className="text-xs uppercase tracking-widest text-text-secondary">Rewinds</div>
+                  <div className="mt-1 font-semibold text-text-primary">{lastSessionSummary.rewinds}</div>
+                </div>
+                <div className="rounded-lg border border-text-primary/10 bg-black/10 p-3">
+                  <div className="text-xs uppercase tracking-widest text-text-secondary">Saved</div>
+                  <div className="mt-1 font-semibold text-text-primary">
+                    {lastSessionSummary.bookmarksAdded + lastSessionSummary.notesAdded}
+                  </div>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-text-secondary">
+                Today: {studyGoal.type === 'minutes' ? `${todayProgress.minutes}/${studyGoal.value} min` : `${todayProgress.words}/${studyGoal.value} words`} • Streak {todayProgress.streak}d
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSessionRecapOpen(false)}
+                  className="px-4 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-text-primary/5 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSessionRecapOpen(false);
+                    startReviewMode();
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-bold bg-accent-red text-white shadow-glow hover:bg-accent-red/90 transition-colors"
+                >
+                  Review now
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {resumePromptBook && (
+          <div className="fixed inset-0 z-[96] flex items-center justify-center p-6">
+            <button
+              type="button"
+              aria-label="Close resume options"
+              className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+              onClick={() => setResumePromptBook(null)}
+            />
+            <div className="relative w-full max-w-sm rounded-2xl border border-text-primary/10 bg-panel-bg p-5 shadow-2xl">
+              <h3 className="text-lg font-header font-bold text-text-primary">Continue reading?</h3>
+              <p className="mt-2 text-sm text-text-secondary">
+                Choose how you want to open <span className="text-text-primary/90">{resumePromptBook.title}</span>.
+              </p>
+              <div className="mt-4 grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => openBook(resumePromptBook)}
+                  className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 transition-colors"
+                >
+                  Resume
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openBook(resumePromptBook, { review: true })}
+                  className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 transition-colors"
+                >
+                  Review bookmarks/notes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openBook(resumePromptBook, { restart: true })}
+                  className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-panel-bg border border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-colors"
+                >
+                  Restart
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
     </div>

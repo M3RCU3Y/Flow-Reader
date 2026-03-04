@@ -42,6 +42,17 @@ export interface BookSettings {
   lineWidth?: LineWidth;
   bionicScrollPercent?: number;
   bookmarks?: Bookmark[];
+  notes?: Note[];
+  reviewQueue?: ReviewItem[];
+  sourceMeta?: {
+    sourceType: 'paste' | 'pdf' | 'docx' | 'url';
+    sourceUrl?: string;
+  };
+  lastSessionSummary?: SessionSummary;
+  goalsSnapshot?: {
+    dailyGoalType: DailyGoalType;
+    dailyGoalValue: number;
+  };
 }
 
 export interface Bookmark {
@@ -49,6 +60,39 @@ export interface Bookmark {
   index: number;
   note?: string;
   createdAt: number;
+}
+
+export interface Note {
+  id: string;
+  index: number;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ReviewItem {
+  id: string;
+  index: number;
+  reason: 'bookmark' | 'note' | 'rewind';
+}
+
+export interface SessionSummary {
+  id: string;
+  bookId: string;
+  startedAt: number;
+  endedAt: number;
+  wordsRead: number;
+  avgWpm: number;
+  rewinds: number;
+  bookmarksAdded: number;
+  notesAdded: number;
+}
+
+export type DailyGoalType = 'minutes' | 'words';
+
+export interface DailyGoal {
+  type: DailyGoalType;
+  value: number;
 }
 
 export interface ThemeTokens {

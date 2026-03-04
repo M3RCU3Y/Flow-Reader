@@ -2,15 +2,29 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, Loader2, ArrowRight, X, Maximize2 } from 'lucide-react';
 import { extractTextFromPDF } from '../services/pdfService';
 import { cleanImportedText, normalizeUrlInput, parseProxyEnvelope } from '../services/urlImportService';
+import type { CleanStats, UrlImportProfile } from '../services/urlImportService';
 import type { ExtractPdfProgressInfo, PdfExtractStage, ProcessingStatus } from '../types';
 
 interface TextInputProps {
-  onStartReading: (title: string, text: string) => void;
+  onStartReading: (
+    title: string,
+    text: string,
+    sourceMeta?: { sourceType: 'paste' | 'pdf' | 'docx' | 'url'; sourceUrl?: string }
+  ) => void;
   onOpenHelp?: () => void;
   onTryDemo?: (title: string, text: string) => void;
 }
 
 type UrlImportState = 'idle' | 'blocked' | 'error';
+
+interface UrlPreviewState {
+  title: string;
+  sourceUrl: string;
+  rawText: string;
+  cleanedText: string;
+  stats: CleanStats;
+  suspiciousTokens: string[];
+}
 
 const BOT_CHECK_MARKERS = [
   'captcha',
@@ -29,8 +43,26 @@ const BOT_CHECK_MARKERS = [
 const MIN_URL_IMPORT_CHARS = 40;
 const MIN_CLEANED_NON_WHITESPACE = 140;
 const MIN_CLEANED_WORDS = 24;
+const URL_IMPORT_PROFILES: Array<{ value: UrlImportProfile; label: string }> = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'forum', label: 'Forum' },
+  { value: 'docs', label: 'Docs' },
+  { value: 'news', label: 'News/Blog' },
+];
 
-const isLikelyBotCheckResponse = (raw: string, parsedText: string, cleanedText?: string) => {
+const isCancelledFileImport = (error: unknown, signal: AbortSignal) => {
+  if (signal.aborted) return true;
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { name?: string; code?: string };
+  return candidate.name === 'AbortError' || candidate.code === 'CANCELLED';
+};
+
+const isLikelyBotCheckResponse = (
+  raw: string,
+  parsedText: string,
+  cleanedText?: string,
+  stats?: CleanStats
+) => {
   const source = raw.toLowerCase();
   if (BOT_CHECK_MARKERS.some((marker) => source.includes(marker))) return true;
   const compact = parsedText.replace(/\s+/g, '');
@@ -38,7 +70,9 @@ const isLikelyBotCheckResponse = (raw: string, parsedText: string, cleanedText?:
   if (!cleanedText) return false;
   const cleanedWords = cleanedText.trim().split(/\s+/).filter(Boolean).length;
   const cleanedCompact = cleanedText.replace(/\s+/g, '');
-  return cleanedCompact.length < MIN_CLEANED_NON_WHITESPACE && cleanedWords < MIN_CLEANED_WORDS;
+  if (cleanedCompact.length < MIN_CLEANED_NON_WHITESPACE && cleanedWords < MIN_CLEANED_WORDS) return true;
+  if (stats && stats.suspiciousLeftovers >= 6 && cleanedWords < 80) return true;
+  return false;
 };
 
 export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp, onTryDemo }) => {
@@ -64,6 +98,11 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   const [urlImportMessage, setUrlImportMessage] = useState('');
   const [blockedSourceUrl, setBlockedSourceUrl] = useState('');
   const [isPastingClipboard, setIsPastingClipboard] = useState(false);
+  const [urlProfile, setUrlProfile] = useState<UrlImportProfile>('auto');
+  const [urlPreview, setUrlPreview] = useState<UrlPreviewState | null>(null);
+  const [sourceMeta, setSourceMeta] = useState<{ sourceType: 'paste' | 'pdf' | 'docx' | 'url'; sourceUrl?: string }>({
+    sourceType: 'paste',
+  });
 
   useEffect(() => {
     if (!isFullscreenEditorOpen) return;
@@ -101,7 +140,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         finalTitle = `Untitled Note ${new Date().toLocaleDateString()}`;
       }
     }
-    onStartReading(finalTitle, text);
+    onStartReading(finalTitle, text, sourceMeta);
   };
 
   const triggerFilePicker = () => fileInputRef.current?.click();
@@ -119,11 +158,13 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
 
     setTitle(demoTitle);
     setText(demoText);
+    setSourceMeta({ sourceType: 'paste' });
     setStatus('success');
     setErrorMessage('');
     setUrlImportState('idle');
     setUrlImportMessage('');
     setBlockedSourceUrl('');
+    setUrlPreview(null);
     resetProgress();
     onTryDemo?.(demoTitle, demoText);
     onOpenHelp?.();
@@ -138,6 +179,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
 
     setStatus('processing');
     setErrorMessage('');
+    setUrlPreview(null);
     resetProgress();
     setTitle(file.name.replace(/\.(pdf|docx|txt)$/i, ''));
 
@@ -154,6 +196,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         /\.docx$/i.test(file.name);
 
       if (isPdf) {
+        setSourceMeta({ sourceType: 'pdf' });
         const onProgress = (info: ExtractPdfProgressInfo) => {
           setProgressStage(info.stage);
           setProgressPage(info.page);
@@ -200,6 +243,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
           }
         }
       } else if (isDocx) {
+        setSourceMeta({ sourceType: 'docx' });
         setProgressStage('loading');
         setProgressMessage('Importing DOCX…');
         setProgressPage(0);
@@ -213,6 +257,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         setStatus('success');
         resetProgress();
       } else {
+        setSourceMeta({ sourceType: 'paste' });
         const reader = new FileReader();
         reader.onload = (event) => {
           setText(event.target?.result as string || '');
@@ -222,9 +267,14 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         reader.readAsText(file);
       }
     } catch (error) {
-      console.error(error);
-      setStatus('error');
-      setErrorMessage('Failed to load file. Please try again.');
+      if (isCancelledFileImport(error, controller.signal)) {
+        setStatus('idle');
+        setErrorMessage('');
+      } else {
+        console.error(error);
+        setStatus('error');
+        setErrorMessage('Failed to load file. Please try again.');
+      }
       resetProgress();
     } finally {
       abortControllerRef.current = null;
@@ -239,6 +289,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     abortControllerRef.current = null;
     setStatus('idle');
     setErrorMessage('');
+    setUrlPreview(null);
     resetProgress();
     if (passwordResolverRef.current) {
       passwordResolverRef.current(null);
@@ -279,6 +330,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     setUrlImportState('idle');
     setUrlImportMessage('');
     setBlockedSourceUrl('');
+    setUrlPreview(null);
     resetProgress();
     setProgressStage('loading');
     setProgressMessage('Fetching URL…');
@@ -294,8 +346,11 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       if (!res.ok) throw new Error(`Failed to fetch URL (${res.status})`);
       const raw = await res.text();
       const parsed = parseProxyEnvelope(raw);
-      const cleaned = cleanImportedText(parsed.body, { sourceUrl: url });
-      if (isLikelyBotCheckResponse(raw, parsed.body, cleaned.text)) {
+      const cleaned = cleanImportedText(parsed.body, {
+        sourceUrl: url,
+        profile: urlProfile,
+      });
+      if (isLikelyBotCheckResponse(raw, parsed.body, cleaned.text, cleaned.stats)) {
         setStatus('idle');
         setUrlImportState('blocked');
         setUrlImportMessage(
@@ -309,13 +364,17 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         throw new Error('No readable text was returned for this URL.');
       }
       const nextTitle = parsed.title || url.replace(/^https?:\/\//i, '').slice(0, 64);
-      setTitle(nextTitle);
-      setText(cleaned.text);
-      setStatus('success');
+      setUrlPreview({
+        title: nextTitle,
+        sourceUrl: url,
+        rawText: parsed.body,
+        cleanedText: cleaned.text,
+        stats: cleaned.stats,
+        suspiciousTokens: cleaned.suspiciousTokens,
+      });
+      setStatus('idle');
       setUrlImportState('idle');
-      setUrlImportMessage(
-        `Imported and cleaned (${cleaned.stats.removedLines} noisy lines removed, ${cleaned.stats.rawUrlsRemoved} links normalized).`
-      );
+      setUrlImportMessage('Review import cleanup below before loading into the reader.');
       resetProgress();
     } catch (e: any) {
       console.error(e);
@@ -334,6 +393,29 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       resetProgress();
     } finally {
       abortControllerRef.current = null;
+    }
+  };
+
+  const applyUrlImportChoice = (
+    choice: 'cleaned' | 'raw' | 'edit',
+    preview: UrlPreviewState
+  ) => {
+    const chosenText = choice === 'raw' ? preview.rawText : preview.cleanedText;
+    setTitle(preview.title);
+    setText(chosenText.trim());
+    setSourceMeta({ sourceType: 'url', sourceUrl: preview.sourceUrl });
+    setStatus('success');
+    setErrorMessage('');
+    setUrlImportState('idle');
+    setBlockedSourceUrl('');
+    setUrlImportMessage(
+      choice === 'raw'
+        ? 'Imported raw source text.'
+        : `Imported cleaned text (${preview.stats.removedLines} noisy lines removed).`
+    );
+    setUrlPreview(null);
+    if (choice === 'edit') {
+      setIsFullscreenEditorOpen(true);
     }
   };
 
@@ -424,7 +506,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         </button>
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setSourceMeta({ sourceType: 'paste' });
+          }}
           placeholder="Paste text here..."
           className="w-full h-64 bg-transparent border-2 border-dashed border-text-secondary/25 rounded-xl p-6 pb-24 sm:pb-6 text-lg text-text-primary placeholder:text-text-primary/30 caret-accent-red focus:border-accent-red/60 focus:outline-none focus:bg-transparent focus:ring-0 focus:ring-offset-0 transition-colors duration-200 focus:shadow-glow resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
           style={{ WebkitOverflowScrolling: 'touch' }}
@@ -486,6 +571,23 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       </div>
 
       <div className="mt-4 flex flex-col sm:flex-row items-stretch justify-center gap-2">
+        <select
+          value={urlProfile}
+          onChange={(e) => {
+            setUrlProfile(e.target.value as UrlImportProfile);
+            setUrlImportMessage('');
+            setUrlPreview(null);
+          }}
+          disabled={status === 'processing'}
+          className="rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
+          aria-label="URL import profile"
+        >
+          {URL_IMPORT_PROFILES.map((profile) => (
+            <option key={profile.value} value={profile.value} className="bg-panel-bg text-text-primary">
+              {profile.label}
+            </option>
+          ))}
+        </select>
         <input
           value={urlDraft}
           onChange={(e) => {
@@ -494,6 +596,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
             setUrlImportMessage('');
             setBlockedSourceUrl('');
             setErrorMessage('');
+            setUrlPreview(null);
           }}
           placeholder="Paste an article URL…"
           className="w-full sm:w-[28rem] rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
@@ -550,6 +653,47 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         </div>
       )}
 
+      {urlPreview && (
+        <div className="mt-3 rounded-xl border border-text-primary/10 bg-panel-bg/70 p-4">
+          <h3 className="text-sm font-semibold text-text-primary">Import preview</h3>
+          <p className="mt-1 text-xs text-text-secondary">
+            {urlPreview.stats.removedLines} lines removed, {urlPreview.stats.rawUrlsRemoved} links normalized,
+            {` ${urlPreview.stats.suspiciousLeftovers}`} suspicious leftovers.
+          </p>
+          {urlPreview.suspiciousTokens.length > 0 && (
+            <div className="mt-2 rounded-lg border border-text-primary/10 bg-black/20 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Potential leftovers</p>
+              <p className="mt-1 text-xs text-text-secondary break-words">
+                {urlPreview.suspiciousTokens.join(' • ')}
+              </p>
+            </div>
+          )}
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={() => applyUrlImportChoice('cleaned', urlPreview)}
+              className="px-3 py-2 rounded-lg text-sm font-semibold bg-accent-red text-white shadow-glow hover:bg-accent-red/90 transition-colors"
+            >
+              Use cleaned
+            </button>
+            <button
+              type="button"
+              onClick={() => applyUrlImportChoice('raw', urlPreview)}
+              className="px-3 py-2 rounded-lg text-sm font-medium bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 hover:border-text-primary/20 transition-colors"
+            >
+              Use raw
+            </button>
+            <button
+              type="button"
+              onClick={() => applyUrlImportChoice('edit', urlPreview)}
+              className="px-3 py-2 rounded-lg text-sm font-medium bg-panel-bg border border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-colors"
+            >
+              Edit first
+            </button>
+          </div>
+        </div>
+      )}
+
       {isFullscreenEditorOpen && (
         <div className="fixed inset-0 z-50 flex flex-col bg-app-bg">
           <div
@@ -571,7 +715,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
           <div className="flex-1 min-h-0 px-4 py-4">
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                setSourceMeta({ sourceType: 'paste' });
+              }}
               placeholder="Paste text here..."
               autoFocus
               className="w-full h-full min-h-0 rounded-xl border border-text-primary/10 bg-black/10 p-4 pb-28 text-base sm:text-lg text-text-primary placeholder:text-text-secondary/60 caret-accent-red focus:border-accent-red/60 focus:outline-none resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
