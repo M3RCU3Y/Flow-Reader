@@ -1,4 +1,4 @@
-import { Book, BookSettings, DailyGoal, Note, ReviewItem, SessionSummary } from '../types';
+import { Book, BookSettings, Note, ReviewItem, SessionSummary } from '../types';
 
 const STORAGE_KEY = 'focus_reader_library';
 const PREFS_KEY = 'focus_reader_prefs';
@@ -8,11 +8,6 @@ const HELP_PREFS_KEY = 'focus_reader_help_prefs';
 const BIONIC_HINT_KEY = 'focus_reader_seen_bionic_hint';
 const SESSION_SUMMARIES_KEY = 'focus_reader_session_summaries';
 const STUDY_GOAL_KEY = 'focus_reader_study_goal';
-
-const DEFAULT_DAILY_GOAL: DailyGoal = {
-  type: 'minutes',
-  value: 20,
-};
 
 const parseJson = <T,>(key: string, fallback: T): T => {
   try {
@@ -145,21 +140,3 @@ export const appendSessionSummary = (summary: SessionSummary): void => {
   localStorage.setItem(SESSION_SUMMARIES_KEY, JSON.stringify(next));
 };
 
-export const getStudyGoal = (): DailyGoal => {
-  const parsed = parseJson<Partial<DailyGoal>>(STUDY_GOAL_KEY, DEFAULT_DAILY_GOAL);
-  const type = parsed?.type === 'words' ? 'words' : 'minutes';
-  const value = Number(parsed?.value);
-  if (!Number.isFinite(value) || value <= 0) return DEFAULT_DAILY_GOAL;
-  return {
-    type,
-    value: Math.round(value),
-  };
-};
-
-export const saveStudyGoal = (goal: DailyGoal): void => {
-  const safe: DailyGoal = {
-    type: goal.type === 'words' ? 'words' : 'minutes',
-    value: Math.max(1, Math.round(goal.value)),
-  };
-  localStorage.setItem(STUDY_GOAL_KEY, JSON.stringify(safe));
-};

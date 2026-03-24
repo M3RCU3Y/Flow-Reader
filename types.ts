@@ -49,10 +49,6 @@ export interface BookSettings {
     sourceUrl?: string;
   };
   lastSessionSummary?: SessionSummary;
-  goalsSnapshot?: {
-    dailyGoalType: DailyGoalType;
-    dailyGoalValue: number;
-  };
 }
 
 export interface Bookmark {
@@ -86,13 +82,6 @@ export interface SessionSummary {
   rewinds: number;
   bookmarksAdded: number;
   notesAdded: number;
-}
-
-export type DailyGoalType = 'minutes' | 'words';
-
-export interface DailyGoal {
-  type: DailyGoalType;
-  value: number;
 }
 
 export interface ThemeTokens {

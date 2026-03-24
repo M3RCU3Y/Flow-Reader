@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Book, BookSettings, Bookmark, DailyGoal, Note, ReaderMode, ReaderPreferences, ReviewItem, SessionSummary } from './types';
+import { Book, BookSettings, Bookmark, Note, ReaderMode, ReaderPreferences, ReviewItem, SessionSummary } from './types';
 import { useRSVP } from './hooks/useRSVP';
 import {
   appendSessionSummary,
   deleteBook,
-  getAllSessionSummaries,
   getLibrary,
-  getSessionSummariesForBook,
-  getStudyGoal,
   saveBook,
-  saveStudyGoal,
   clearAllData,
   updateBookProgress,
   updateBookSettings,
@@ -32,20 +28,6 @@ import { LibrarySortMenu } from './components/LibrarySortMenu';
 
 const REVIEW_WINDOW_BEFORE = 6;
 const REVIEW_WINDOW_AFTER = 14;
-
-const dayKeyFromTs = (ts: number) => {
-  const d = new Date(ts);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-const addDays = (key: string, delta: number) => {
-  const d = new Date(`${key}T00:00:00`);
-  d.setDate(d.getDate() + delta);
-  return dayKeyFromTs(d.getTime());
-};
 
 export default function App() {
   const [activeBook, setActiveBook] = useState<Book | null>(null);
@@ -94,7 +76,6 @@ export default function App() {
   const [showBionicHint, setShowBionicHint] = useState(false);
   const [isBionicHintFading, setIsBionicHintFading] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
-  const [studyGoal, setStudyGoal] = useState<DailyGoal>(() => getStudyGoal());
   const [isSessionRecapOpen, setIsSessionRecapOpen] = useState(false);
   const [lastSessionSummary, setLastSessionSummary] = useState<SessionSummary | null>(null);
   const [sessionWordsRead, setSessionWordsRead] = useState(0);
@@ -246,7 +227,6 @@ export default function App() {
       clearAllData();
       setLibrary([]);
       setActiveBook(null);
-      setStudyGoal(getStudyGoal());
       setLastSessionSummary(null);
       setIsSessionRecapOpen(false);
     }
@@ -257,9 +237,14 @@ export default function App() {
     let nextBook = book;
     if (shouldRestart) {
       updateBookProgress(book.id, 0);
+      updateBookSettings(book.id, { bionicScrollPercent: undefined });
       nextBook = {
         ...book,
         progressIndex: 0,
+        settings: {
+          ...(book.settings || {}),
+          bionicScrollPercent: undefined,
+        },
       };
       setLibrary(getLibrary());
     }
@@ -561,58 +546,6 @@ export default function App() {
 
     return sorted;
   }, [library, libraryQuery, librarySort]);
-
-  const todayProgress = useMemo(() => {
-    const today = dayKeyFromTs(Date.now());
-    const summaries = activeBook ? getSessionSummariesForBook(activeBook.id) : [];
-    const allSummaries = getAllSessionSummaries();
-    const allToday = allSummaries.filter((s) => dayKeyFromTs(s.endedAt) === today);
-    const minutes = allToday.reduce((acc, s) => acc + (s.endedAt - s.startedAt) / 60000, 0);
-    const words = allToday.reduce((acc, s) => acc + s.wordsRead, 0);
-    const goalMet =
-      studyGoal.type === 'minutes'
-        ? minutes >= studyGoal.value
-        : words >= studyGoal.value;
-
-    const byDay = new Map<string, { minutes: number; words: number }>();
-    for (const s of allSummaries) {
-      const key = dayKeyFromTs(s.endedAt);
-      const entry = byDay.get(key) || { minutes: 0, words: 0 };
-      entry.minutes += (s.endedAt - s.startedAt) / 60000;
-      entry.words += s.wordsRead;
-      byDay.set(key, entry);
-    }
-    let streak = 0;
-    let cursor = today;
-    while (true) {
-      const entry = byDay.get(cursor);
-      if (!entry) break;
-      const met = studyGoal.type === 'minutes' ? entry.minutes >= studyGoal.value : entry.words >= studyGoal.value;
-      if (!met) break;
-      streak += 1;
-      cursor = addDays(cursor, -1);
-    }
-
-    return {
-      minutes: Math.round(minutes),
-      words,
-      goalMet,
-      streak,
-      activeBookSessions: summaries.length,
-    };
-  }, [activeBook?.id, studyGoal.type, studyGoal.value, lastSessionSummary?.id]);
-
-  useEffect(() => {
-    saveStudyGoal(studyGoal);
-    if (activeBook) {
-      updateBookSettings(activeBook.id, {
-        goalsSnapshot: {
-          dailyGoalType: studyGoal.type,
-          dailyGoalValue: studyGoal.value,
-        },
-      });
-    }
-  }, [studyGoal]);
 
   const headerEngagedRef = useRef(false);
   const footerEngagedRef = useRef(false);
@@ -1349,6 +1282,8 @@ export default function App() {
       contextStrength: settings?.contextStrength ?? defaults.contextStrength,
       bionicStrength: settings?.bionicStrength ?? defaults.bionicStrength,
       lineWidth: settings?.lineWidth ?? defaults.lineWidth,
+      smartTimingEnabled: defaults.smartTimingEnabled,
+      comfortModeEnabled: defaults.comfortModeEnabled,
     };
     bionicScrollPercentRef.current = settings?.bionicScrollPercent ?? null;
     setReaderSettings(nextSettings);
@@ -1547,32 +1482,6 @@ export default function App() {
                className="mt-3 w-full rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
                aria-label="Search library"
              />
-             <div className="mt-3 rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2">
-               <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-text-secondary font-bold">
-                 <span>Daily Goal</span>
-                 <span>{todayProgress.streak}d streak</span>
-               </div>
-               <div className="mt-1 text-xs text-text-secondary">
-                 {studyGoal.type === 'minutes'
-                   ? `${todayProgress.minutes}/${studyGoal.value} min`
-                   : `${todayProgress.words}/${studyGoal.value} words`}
-               </div>
-               <div className="mt-2 h-1.5 rounded-full bg-text-primary/10 overflow-hidden">
-                 <div
-                   className="h-full bg-progress rounded-full transition-all duration-300"
-                   style={{
-                     width: `${Math.min(
-                       100,
-                       Math.round(
-                         ((studyGoal.type === 'minutes' ? todayProgress.minutes : todayProgress.words) /
-                           Math.max(1, studyGoal.value)) *
-                           100
-                       )
-                     )}%`,
-                   }}
-                 />
-               </div>
-             </div>
            </div>
            <Library 
              books={visibleLibrary} 
@@ -1969,11 +1878,6 @@ export default function App() {
           isOpen={isHelpOpen}
           mode={mode}
           hasActiveBook={Boolean(activeBook)}
-          studyGoal={studyGoal}
-          todayMinutes={todayProgress.minutes}
-          todayWords={todayProgress.words}
-          streakDays={todayProgress.streak}
-          onStudyGoalChange={setStudyGoal}
           onClose={() => setIsHelpOpen(false)}
           onDontShowAgain={() => setHelpSuppressed(true)}
         />
@@ -2036,9 +1940,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-text-secondary">
-                Today: {studyGoal.type === 'minutes' ? `${todayProgress.minutes}/${studyGoal.value} min` : `${todayProgress.words}/${studyGoal.value} words`} • Streak {todayProgress.streak}d
-              </p>
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"

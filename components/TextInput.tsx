@@ -438,6 +438,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         return;
       }
       setText(cleaned);
+      setSourceMeta({
+        sourceType: 'url',
+        sourceUrl: blockedSourceUrl || normalizeUrlInput(urlDraft),
+      });
       if (!title.trim()) {
         const fallbackTitle = (blockedSourceUrl || normalizeUrlInput(urlDraft))
           .replace(/^https?:\/\//i, '')
@@ -447,6 +451,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       setStatus('success');
       setErrorMessage('');
       setUrlImportState('idle');
+      setBlockedSourceUrl('');
       setUrlImportMessage('Pasted text from clipboard.');
     } catch (err) {
       console.error(err);

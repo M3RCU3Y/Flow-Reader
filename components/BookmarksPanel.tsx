@@ -107,7 +107,8 @@ export const BookmarksPanel: React.FC<BookmarksPanelProps> = ({
           <button
             type="button"
             onClick={onStartReview}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-accent-red/30 bg-accent-red/15 text-sm font-semibold text-text-primary hover:bg-accent-red/20 transition-colors"
+            disabled={reviewItemCount === 0}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-accent-red/30 bg-accent-red/15 text-sm font-semibold text-text-primary hover:bg-accent-red/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RotateCcw className="w-4 h-4" />
             Review session ({reviewItemCount})

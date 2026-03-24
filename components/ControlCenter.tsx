@@ -67,7 +67,8 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
 	  }, [sprintEndsAt]);
 	  
 	  // Calculate remaining time
-	  const wordsLeft = total - progress;
+	  const currentWordNumber = total > 0 ? Math.min(progress + 1, total) : 0;
+	  const wordsLeft = Math.max(0, total - progress);
 	  const minutesLeft = Math.ceil(wordsLeft / wpm);
 	  const sprintMsLeft = sprintEndsAt ? Math.max(0, sprintEndsAt - nowTs) : 0;
 	  const sprintProgress =
@@ -90,9 +91,9 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
         <input 
           type="range"
           min="0"
-          max={total}
+          max={Math.max(total - 1, 0)}
           value={progress}
-          onChange={(e) => onSeek(parseInt(e.target.value))}
+          onChange={(e) => onSeek(parseInt(e.target.value, 10))}
           className="w-full h-1 bg-text-primary/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-progress hover:[&::-webkit-slider-thumb]:scale-125 [&::-webkit-slider-thumb]:transition-all"
         />
       </div>
@@ -109,7 +110,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
              {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
            </button>
            <div className="text-xs text-text-secondary font-mono">
-             {progress} / {total} w
+             {currentWordNumber} / {total} w
            </div>
         </div>
 
