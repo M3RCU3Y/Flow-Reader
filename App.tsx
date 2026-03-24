@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Book, BookSettings, Bookmark, Note, ReaderMode, ReaderPreferences, ReviewItem, SessionSummary } from './types';
+import { Book, BookSettings, Bookmark, Note, ReaderMode, ReaderPreferences, ReviewItem, SessionSummary, SourceMeta } from './types';
 import { useRSVP } from './hooks/useRSVP';
 import {
   appendSessionSummary,
@@ -15,6 +15,14 @@ import { getReaderPreferences, saveReaderPreferences } from './services/preferen
 import { ControlCenter } from './components/ControlCenter';
 import { TextInput } from './components/TextInput';
 import { Library } from './components/Library';
+import {
+  getLibrarySourceLabel,
+  LIBRARY_SOURCE_FILTERS,
+  matchesSourceFilter,
+  prepareRestartedBook,
+  type LibrarySourceFilter,
+} from './services/bookState';
+import { buildSessionSummary } from './services/sessionSummary';
 import { ModeToggle } from './components/ModeToggle';
 import { RSVPReader } from './components/RSVPReader';
 import { RSVPEnhancedReader } from './components/RSVPEnhancedReader';
@@ -41,6 +49,7 @@ export default function App() {
   const [isUiVisible, setIsUiVisible] = useState(true);
   const [libraryQuery, setLibraryQuery] = useState('');
   const [librarySort, setLibrarySort] = useState<'recent' | 'progress' | 'created'>('recent');
+  const [librarySourceFilter, setLibrarySourceFilter] = useState<LibrarySourceFilter>('all');
   const uiIdleTimeoutRef = useRef<number | null>(null);
   const [isBionicScrolling, setIsBionicScrolling] = useState(false);
   const bionicScrollIdleTimeoutRef = useRef<number | null>(null);
@@ -195,7 +204,7 @@ export default function App() {
   const handleStartNew = (
     title: string,
     text: string,
-    sourceMeta?: { sourceType: 'paste' | 'pdf' | 'docx' | 'url'; sourceUrl?: string }
+    sourceMeta?: SourceMeta
   ) => {
     const words = text.trim().split(/\s+/).filter(w => w.length > 0);
     const newBook: Book = {
@@ -236,16 +245,9 @@ export default function App() {
     const shouldRestart = Boolean(opts?.restart);
     let nextBook = book;
     if (shouldRestart) {
-      updateBookProgress(book.id, 0);
-      updateBookSettings(book.id, { bionicScrollPercent: undefined });
-      nextBook = {
-        ...book,
-        progressIndex: 0,
-        settings: {
-          ...(book.settings || {}),
-          bionicScrollPercent: undefined,
-        },
-      };
+      nextBook = prepareRestartedBook(book);
+      updateBookProgress(book.id, nextBook.progressIndex);
+      updateBookSettings(book.id, { bionicScrollPercent: nextBook.settings?.bionicScrollPercent });
       setLibrary(getLibrary());
     }
     setActiveBook(nextBook);
@@ -373,6 +375,20 @@ export default function App() {
     saveActiveBookmarks(existing.filter((b) => b.id !== id));
   };
 
+  const toggleBookmarkPin = (id: string) => {
+    const existing = getActiveBookmarks();
+    saveActiveBookmarks(
+      existing.map((bookmark) =>
+        bookmark.id === id
+          ? {
+              ...bookmark,
+              pinnedAt: bookmark.pinnedAt ? undefined : Date.now(),
+            }
+          : bookmark
+      )
+    );
+  };
+
   const addNote = (text: string) => {
     if (!activeBook) return;
     const nextIndex = rsvp.index;
@@ -406,6 +422,21 @@ export default function App() {
   const deleteNote = (id: string) => {
     const existing = getActiveNotes();
     saveActiveNotes(existing.filter((note) => note.id !== id));
+  };
+
+  const toggleNotePin = (id: string) => {
+    const existing = getActiveNotes();
+    saveActiveNotes(
+      existing.map((note) =>
+        note.id === id
+          ? {
+              ...note,
+              pinnedAt: note.pinnedAt ? undefined : Date.now(),
+              updatedAt: Date.now(),
+            }
+          : note
+      )
+    );
   };
 
   const buildReviewQueue = (): ReviewItem[] => {
@@ -483,7 +514,7 @@ export default function App() {
   };
 
   const getBookmarkSnippet = (idx: number) => {
-    const slice = rsvp.words.slice(idx, idx + 8).join(' ');
+    const slice = rsvp.words.slice(idx, idx + 12).join(' ');
     return slice ? `“${slice}…”` : '';
   };
 
@@ -520,8 +551,11 @@ export default function App() {
   const visibleLibrary = useMemo(() => {
     const q = libraryQuery.trim().toLowerCase();
     let items = library;
+    if (librarySourceFilter !== 'all') {
+      items = items.filter((book) => matchesSourceFilter(book, librarySourceFilter));
+    }
     if (q) {
-      items = library.filter((b) => {
+      items = items.filter((b) => {
         const title = (b.title || '').toLowerCase();
         if (title.includes(q)) return true;
         // Content search can be heavy; cap to the first chunk for responsiveness.
@@ -545,7 +579,7 @@ export default function App() {
     }
 
     return sorted;
-  }, [library, libraryQuery, librarySort]);
+  }, [library, libraryQuery, librarySort, librarySourceFilter]);
 
   const headerEngagedRef = useRef(false);
   const footerEngagedRef = useRef(false);
@@ -582,6 +616,16 @@ export default function App() {
   const isFooterVisible = !activeBook ? true : isBionicMode ? isFooterVisibleBionic : isUiVisible;
   const isThemeVisible = !activeBook || (isBionicMode ? isFooterVisibleBionic : isUiVisible) || isThemeEngaged;
   const currentReviewItem = isReviewMode ? reviewQueue[reviewCursor] : null;
+  const reviewableItemCount = activeBook ? buildReviewQueue().length : 0;
+  const isAtBookEnd = Boolean(activeBook && rsvp.totalWords > 0 && rsvp.index >= rsvp.totalWords - 1);
+  const showEndOfBookActions = Boolean(
+    activeBook &&
+      isAtBookEnd &&
+      !rsvp.isPlaying &&
+      !isReviewMode &&
+      !isSessionRecapOpen &&
+      !resumePromptBook
+  );
 
   const applyBookSettings = (updates: Partial<BookSettings>) => {
     if (!activeBook) return;
@@ -723,29 +767,22 @@ export default function App() {
   }, [activeBook?.id, rsvp.index, rsvp.isPlaying, rsvp.wpm]);
 
   const finalizeSession = () => {
-    if (!activeBook || !sessionStartRef.current) return;
-    const endedAt = Date.now();
-    const startedAt = sessionStartRef.current;
-    const durationMs = Math.max(0, endedAt - startedAt);
-    if (durationMs < 1200 && sessionWordsRead === 0 && sessionBookmarksAdded === 0 && sessionNotesAdded === 0) {
-      sessionStartRef.current = null;
-      return;
-    }
-    const samples = sessionWpmSamplesRef.current;
-    const avgWpm = samples.length
-      ? Math.round(samples.reduce((acc, item) => acc + item, 0) / samples.length)
-      : rsvp.wpm;
-    const summary: SessionSummary = {
-      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    if (!activeBook) return;
+    const summary = buildSessionSummary({
       bookId: activeBook.id,
-      startedAt,
-      endedAt,
+      startedAt: sessionStartRef.current,
+      endedAt: Date.now(),
       wordsRead: sessionWordsRead,
-      avgWpm,
+      currentWpm: rsvp.wpm,
+      wpmSamples: sessionWpmSamplesRef.current,
       rewinds: sessionRewinds,
       bookmarksAdded: sessionBookmarksAdded,
       notesAdded: sessionNotesAdded,
-    };
+    });
+    if (!summary) {
+      sessionStartRef.current = null;
+      return;
+    }
     appendSessionSummary(summary);
     updateBookSettings(activeBook.id, { lastSessionSummary: summary });
     setActiveBook((prev) => {
@@ -1482,12 +1519,32 @@ export default function App() {
                className="mt-3 w-full rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
                aria-label="Search library"
              />
+             <div className="mt-3 flex flex-wrap gap-2">
+               {LIBRARY_SOURCE_FILTERS.map((filter) => {
+                 const active = filter === librarySourceFilter;
+                 return (
+                   <button
+                     key={filter}
+                     type="button"
+                     onClick={() => setLibrarySourceFilter(filter)}
+                     className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-colors ${
+                       active
+                         ? 'bg-accent-red/15 border-accent-red/30 text-text-primary shadow-glow'
+                         : 'bg-text-primary/5 border-text-primary/10 text-text-secondary hover:text-text-primary'
+                     }`}
+                   >
+                     {getLibrarySourceLabel(filter)}
+                   </button>
+                 );
+               })}
+             </div>
            </div>
            <Library 
              books={visibleLibrary} 
              onSelect={handleSelectBook} 
              onDelete={handleDelete}
-             activeId={activeBook?.id} 
+             activeId={activeBook?.id}
+             emptyMessage={library.length === 0 ? 'No readings yet.' : 'No readings match this search or filter.'}
            />
         </div>
 
@@ -1711,6 +1768,41 @@ export default function App() {
                   onTouchEnd={handleReaderTouchEnd}
                   onTouchCancel={handleReaderTouchEnd}
                 >
+                  {showEndOfBookActions && (
+                    <div className="absolute inset-0 z-30 flex items-center justify-center p-6 pointer-events-none">
+                      <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-text-primary/10 bg-panel-bg/92 backdrop-blur-md p-5 shadow-2xl">
+                        <div className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">End of book</div>
+                        <h3 className="mt-2 text-2xl font-header font-bold text-text-primary">You made it through {activeBook?.title}</h3>
+                        <p className="mt-2 text-sm text-text-secondary">
+                          Replay from the top, review your saved spots, or head back to the library.
+                        </p>
+                        <div className="mt-4 grid gap-2">
+                          <button
+                            type="button"
+                            onClick={rsvp.togglePlay}
+                            className="w-full px-4 py-2 rounded-lg text-sm font-bold bg-accent-red text-white shadow-glow hover:bg-accent-red/90 transition-colors"
+                          >
+                            Replay from start
+                          </button>
+                          <button
+                            type="button"
+                            onClick={startReviewMode}
+                            disabled={reviewableItemCount === 0}
+                            className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Review saved items ({reviewableItemCount})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleExitReader}
+                            className="w-full px-4 py-2 rounded-lg text-sm font-medium bg-panel-bg border border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-colors"
+                          >
+                            Return to library
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 	                <div
 	                  key={mode}
 		                  className={`h-full w-full animate-in fade-in duration-500 ${mode === 'bionic_flow' ? '' : 'flex items-center justify-center'} ${
@@ -1890,10 +1982,12 @@ export default function App() {
           onAddNote={addNote}
           onUpdateNote={updateNote}
           onDeleteNote={deleteNote}
+          onToggleNotePin={toggleNotePin}
           onJump={jumpToBookmark}
           onDelete={deleteBookmark}
+          onToggleBookmarkPin={toggleBookmarkPin}
           onStartReview={startReviewMode}
-          reviewItemCount={buildReviewQueue().length}
+          reviewItemCount={reviewableItemCount}
           onClose={() => setIsBookmarksOpen(false)}
           getSnippet={getBookmarkSnippet}
         />
@@ -1954,7 +2048,8 @@ export default function App() {
                     setIsSessionRecapOpen(false);
                     startReviewMode();
                   }}
-                  className="px-4 py-2 rounded-lg text-sm font-bold bg-accent-red text-white shadow-glow hover:bg-accent-red/90 transition-colors"
+                  disabled={reviewableItemCount === 0}
+                  className="px-4 py-2 rounded-lg text-sm font-bold bg-accent-red text-white shadow-glow hover:bg-accent-red/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Review now
                 </button>

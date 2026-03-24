@@ -17,6 +17,20 @@ export interface CleanedImportResult {
   text: string;
   stats: CleanStats;
   suspiciousTokens: string[];
+  removedLineSamples: string[];
+}
+
+export type UrlImportConfidence = 'low' | 'medium' | 'high';
+
+export interface UrlImportPreviewSummary {
+  titleConfidence: UrlImportConfidence;
+  sourceConfidence: UrlImportConfidence;
+  titleOrigin: 'page' | 'fallback';
+  rawWordCount: number;
+  cleanedWordCount: number;
+  rawExcerpt: string;
+  cleanedExcerpt: string;
+  removedLineSamples: string[];
 }
 
 export type UrlImportProfile = 'auto' | 'forum' | 'docs' | 'news';
@@ -250,11 +264,16 @@ export const cleanImportedText = (
 
   const { output, rawUrlsRemoved, droppedReferenceDefs } = replaceLinksAndMarkup(base);
   const filteredLines: string[] = [];
+  const removedLineSamples: string[] = [];
   let removedLines = 0;
 
   for (const line of output.split('\n')) {
+    const compactLine = collapseSpaces(line);
     if (shouldDropLine(line, domain, profile)) {
       removedLines += 1;
+      if (compactLine && removedLineSamples.length < 4) {
+        removedLineSamples.push(compactLine);
+      }
       continue;
     }
     filteredLines.push(line);
@@ -275,6 +294,7 @@ export const cleanImportedText = (
   return {
     text: cleanedText,
     suspiciousTokens,
+    removedLineSamples,
     stats: {
       linesBefore,
       linesAfter,
@@ -284,5 +304,50 @@ export const cleanImportedText = (
       droppedReferenceDefs,
       suspiciousLeftovers: suspiciousTokens.length,
     },
+  };
+};
+
+const countWords = (input: string) => input.trim().split(/\s+/).filter(Boolean).length;
+
+const toExcerpt = (input: string, maxChars = 220) => {
+  const compact = collapseSpaces(input.replace(/\s+/g, ' '));
+  if (compact.length <= maxChars) return compact;
+  return `${compact.slice(0, maxChars).trimEnd()}...`;
+};
+
+export const summarizeUrlImportPreview = (input: {
+  parsedTitle?: string;
+  resolvedTitle: string;
+  rawText: string;
+  cleaned: CleanedImportResult;
+}): UrlImportPreviewSummary => {
+  const rawWordCount = countWords(input.rawText);
+  const cleanedWordCount = countWords(input.cleaned.text);
+  const hasParsedTitle = Boolean(input.parsedTitle && input.parsedTitle.trim().length > 0);
+  const titleLength = input.resolvedTitle.trim().length;
+
+  let titleConfidence: UrlImportConfidence = 'low';
+  if (hasParsedTitle && titleLength >= 12 && titleLength <= 120) {
+    titleConfidence = 'high';
+  } else if (hasParsedTitle || titleLength >= 8) {
+    titleConfidence = 'medium';
+  }
+
+  let sourceConfidence: UrlImportConfidence = 'low';
+  if (cleanedWordCount >= 180 && input.cleaned.stats.suspiciousLeftovers === 0) {
+    sourceConfidence = 'high';
+  } else if (cleanedWordCount >= 80 && input.cleaned.stats.suspiciousLeftovers <= 3) {
+    sourceConfidence = 'medium';
+  }
+
+  return {
+    titleConfidence,
+    sourceConfidence,
+    titleOrigin: hasParsedTitle ? 'page' : 'fallback',
+    rawWordCount,
+    cleanedWordCount,
+    rawExcerpt: toExcerpt(input.rawText),
+    cleanedExcerpt: toExcerpt(input.cleaned.text),
+    removedLineSamples: input.cleaned.removedLineSamples,
   };
 };

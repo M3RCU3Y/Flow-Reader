@@ -1,15 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, Loader2, ArrowRight, X, Maximize2 } from 'lucide-react';
 import { extractTextFromPDF } from '../services/pdfService';
-import { cleanImportedText, normalizeUrlInput, parseProxyEnvelope } from '../services/urlImportService';
-import type { CleanStats, UrlImportProfile } from '../services/urlImportService';
-import type { ExtractPdfProgressInfo, PdfExtractStage, ProcessingStatus } from '../types';
+import {
+  cleanImportedText,
+  normalizeUrlInput,
+  parseProxyEnvelope,
+  summarizeUrlImportPreview,
+} from '../services/urlImportService';
+import type { CleanStats, UrlImportConfidence, UrlImportProfile } from '../services/urlImportService';
+import type { ExtractPdfProgressInfo, PdfExtractStage, ProcessingStatus, SourceMeta } from '../types';
 
 interface TextInputProps {
   onStartReading: (
     title: string,
     text: string,
-    sourceMeta?: { sourceType: 'paste' | 'pdf' | 'docx' | 'url'; sourceUrl?: string }
+    sourceMeta?: SourceMeta
   ) => void;
   onOpenHelp?: () => void;
   onTryDemo?: (title: string, text: string) => void;
@@ -24,6 +29,14 @@ interface UrlPreviewState {
   cleanedText: string;
   stats: CleanStats;
   suspiciousTokens: string[];
+  titleConfidence: UrlImportConfidence;
+  sourceConfidence: UrlImportConfidence;
+  titleOrigin: 'page' | 'fallback';
+  rawWordCount: number;
+  cleanedWordCount: number;
+  rawExcerpt: string;
+  cleanedExcerpt: string;
+  removedLineSamples: string[];
 }
 
 const BOT_CHECK_MARKERS = [
@@ -49,6 +62,18 @@ const URL_IMPORT_PROFILES: Array<{ value: UrlImportProfile; label: string }> = [
   { value: 'docs', label: 'Docs' },
   { value: 'news', label: 'News/Blog' },
 ];
+
+const CONFIDENCE_LABELS: Record<UrlImportConfidence, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
+
+const confidenceClasses: Record<UrlImportConfidence, string> = {
+  low: 'border-amber-500/30 bg-amber-500/10 text-text-primary',
+  medium: 'border-sky-500/30 bg-sky-500/10 text-text-primary',
+  high: 'border-emerald-500/30 bg-emerald-500/10 text-text-primary',
+};
 
 const isCancelledFileImport = (error: unknown, signal: AbortSignal) => {
   if (signal.aborted) return true;
@@ -100,7 +125,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   const [isPastingClipboard, setIsPastingClipboard] = useState(false);
   const [urlProfile, setUrlProfile] = useState<UrlImportProfile>('auto');
   const [urlPreview, setUrlPreview] = useState<UrlPreviewState | null>(null);
-  const [sourceMeta, setSourceMeta] = useState<{ sourceType: 'paste' | 'pdf' | 'docx' | 'url'; sourceUrl?: string }>({
+  const [sourceMeta, setSourceMeta] = useState<SourceMeta>({
     sourceType: 'paste',
   });
 
@@ -364,6 +389,12 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         throw new Error('No readable text was returned for this URL.');
       }
       const nextTitle = parsed.title || url.replace(/^https?:\/\//i, '').slice(0, 64);
+      const previewSummary = summarizeUrlImportPreview({
+        parsedTitle: parsed.title,
+        resolvedTitle: nextTitle,
+        rawText: parsed.body,
+        cleaned,
+      });
       setUrlPreview({
         title: nextTitle,
         sourceUrl: url,
@@ -371,6 +402,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         cleanedText: cleaned.text,
         stats: cleaned.stats,
         suspiciousTokens: cleaned.suspiciousTokens,
+        ...previewSummary,
       });
       setStatus('idle');
       setUrlImportState('idle');
@@ -513,7 +545,6 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
           value={text}
           onChange={(e) => {
             setText(e.target.value);
-            setSourceMeta({ sourceType: 'paste' });
           }}
           placeholder="Paste text here..."
           className="w-full h-64 bg-transparent border-2 border-dashed border-text-secondary/25 rounded-xl p-6 pb-24 sm:pb-6 text-lg text-text-primary placeholder:text-text-primary/30 caret-accent-red focus:border-accent-red/60 focus:outline-none focus:bg-transparent focus:ring-0 focus:ring-offset-0 transition-colors duration-200 focus:shadow-glow resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
@@ -665,6 +696,38 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
             {urlPreview.stats.removedLines} lines removed, {urlPreview.stats.rawUrlsRemoved} links normalized,
             {` ${urlPreview.stats.suspiciousLeftovers}`} suspicious leftovers.
           </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-widest">
+            <span className={`rounded-full border px-2 py-1 ${confidenceClasses[urlPreview.titleConfidence]}`}>
+              Title {CONFIDENCE_LABELS[urlPreview.titleConfidence]}
+            </span>
+            <span className={`rounded-full border px-2 py-1 ${confidenceClasses[urlPreview.sourceConfidence]}`}>
+              Source {CONFIDENCE_LABELS[urlPreview.sourceConfidence]}
+            </span>
+            <span className="rounded-full border border-text-primary/10 bg-black/20 px-2 py-1 text-text-secondary">
+              {urlPreview.cleanedWordCount}/{Math.max(urlPreview.rawWordCount, 1)} words kept
+            </span>
+            <span className="rounded-full border border-text-primary/10 bg-black/20 px-2 py-1 text-text-secondary">
+              {urlPreview.titleOrigin === 'page' ? 'Page title detected' : 'Fallback title'}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-text-primary/10 bg-black/20 px-3 py-3">
+              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Raw sample</p>
+              <p className="mt-2 text-xs text-text-secondary break-words">{urlPreview.rawExcerpt || 'No raw sample available.'}</p>
+            </div>
+            <div className="rounded-lg border border-text-primary/10 bg-black/20 px-3 py-3">
+              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Cleaned sample</p>
+              <p className="mt-2 text-xs text-text-primary/90 break-words">{urlPreview.cleanedExcerpt || 'No cleaned sample available.'}</p>
+            </div>
+          </div>
+          {urlPreview.removedLineSamples.length > 0 && (
+            <div className="mt-3 rounded-lg border border-text-primary/10 bg-black/20 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Removed noisy lines</p>
+              <p className="mt-1 text-xs text-text-secondary break-words">
+                {urlPreview.removedLineSamples.join(' • ')}
+              </p>
+            </div>
+          )}
           {urlPreview.suspiciousTokens.length > 0 && (
             <div className="mt-2 rounded-lg border border-text-primary/10 bg-black/20 px-3 py-2">
               <p className="text-[11px] uppercase tracking-widest text-text-secondary">Potential leftovers</p>
@@ -721,9 +784,8 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
             <textarea
               value={text}
               onChange={(e) => {
-                setText(e.target.value);
-                setSourceMeta({ sourceType: 'paste' });
-              }}
+            setText(e.target.value);
+          }}
               placeholder="Paste text here..."
               autoFocus
               className="w-full h-full min-h-0 rounded-xl border border-text-primary/10 bg-black/10 p-4 pb-28 text-base sm:text-lg text-text-primary placeholder:text-text-secondary/60 caret-accent-red focus:border-accent-red/60 focus:outline-none resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"

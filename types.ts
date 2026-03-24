@@ -25,6 +25,12 @@ export type ProcessingStatus = 'idle' | 'processing' | 'error' | 'success';
 export type ReaderMode = 'rsvp' | 'rsvp_enhanced' | 'bionic_flow';
 export type ContextStrength = 'low' | 'medium' | 'high';
 export type LineWidth = 'normal' | 'wide' | 'focused';
+export type SourceType = 'paste' | 'pdf' | 'docx' | 'url';
+
+export interface SourceMeta {
+  sourceType: SourceType;
+  sourceUrl?: string;
+}
 
 export interface ReaderPreferences {
   lastMode: ReaderMode;
@@ -44,10 +50,7 @@ export interface BookSettings {
   bookmarks?: Bookmark[];
   notes?: Note[];
   reviewQueue?: ReviewItem[];
-  sourceMeta?: {
-    sourceType: 'paste' | 'pdf' | 'docx' | 'url';
-    sourceUrl?: string;
-  };
+  sourceMeta?: SourceMeta;
   lastSessionSummary?: SessionSummary;
 }
 
@@ -56,6 +59,7 @@ export interface Bookmark {
   index: number;
   note?: string;
   createdAt: number;
+  pinnedAt?: number;
 }
 
 export interface Note {
@@ -64,6 +68,7 @@ export interface Note {
   text: string;
   createdAt: number;
   updatedAt: number;
+  pinnedAt?: number;
 }
 
 export interface ReviewItem {
