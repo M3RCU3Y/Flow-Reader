@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     // GitHub Pages hosts under /<repo>/, so production builds need a base path.
     // Keep dev as '/' so `npm run dev` works normally.
-    const base = mode === 'production' ? '/Focus-Reader/' : '/';
+    const base = mode === 'production' ? '/Flow-Reader/' : '/';
     return {
       base,
       server: {
