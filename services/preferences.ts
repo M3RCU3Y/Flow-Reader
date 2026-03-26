@@ -6,6 +6,7 @@ const DEFAULT_PREFS: ReaderPreferences = {
   lastMode: 'rsvp',
   contextStrength: 'medium',
   bionicStrength: 0.4,
+  bionicFontSize: 28,
   lineWidth: 'normal',
   smartTimingEnabled: true,
   comfortModeEnabled: true,

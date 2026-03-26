@@ -3,11 +3,13 @@ import { LineWidth } from '../types';
 
 interface BionicControlsProps {
   bionicStrength: number;
+  bionicFontSize: number;
   lineWidth: LineWidth;
   progressPercent: number;
   currentIndex: number;
   totalWords: number;
   onStrengthChange: (value: number) => void;
+  onFontSizeChange: (value: number) => void;
   onLineWidthChange: (value: LineWidth) => void;
 }
 
@@ -19,11 +21,13 @@ const WIDTH_OPTIONS: Array<{ value: LineWidth; label: string }> = [
 
 export const BionicControls: React.FC<BionicControlsProps> = ({
   bionicStrength,
+  bionicFontSize,
   lineWidth,
   progressPercent,
   currentIndex,
   totalWords,
   onStrengthChange,
+  onFontSizeChange,
   onLineWidthChange,
 }) => {
   const strengthPercent = Math.min(80, Math.max(0, Math.round(bionicStrength * 100)));
@@ -58,6 +62,22 @@ export const BionicControls: React.FC<BionicControlsProps> = ({
               step="5"
               value={strengthPercent}
               onChange={(e) => onStrengthChange(parseInt(e.target.value, 10) / 100)}
+              className="w-28 h-1 bg-text-primary/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-text-primary hover:[&::-webkit-slider-thumb]:bg-accent-red"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">Font Size</span>
+          <div className="flex items-center gap-3 bg-app-bg/50 px-4 py-2 rounded-lg border border-text-primary/5">
+            <span className="text-sm font-mono w-10 text-center text-text-primary">{bionicFontSize}px</span>
+            <input
+              type="range"
+              min="18"
+              max="42"
+              step="1"
+              value={bionicFontSize}
+              onChange={(e) => onFontSizeChange(parseInt(e.target.value, 10))}
               className="w-28 h-1 bg-text-primary/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-text-primary hover:[&::-webkit-slider-thumb]:bg-accent-red"
             />
           </div>

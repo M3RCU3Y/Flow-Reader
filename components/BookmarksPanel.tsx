@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bookmark, Copy, Pin, PinOff, Search, Trash2, X, CornerDownLeft, MessageSquare, Pencil, Check, RotateCcw } from 'lucide-react';
+import { Bookmark, Copy, Pin, PinOff, Search, Trash2, X, CornerDownLeft, MessageSquare, Pencil, Check } from 'lucide-react';
 import type { Bookmark as BookmarkType, Note } from '../types';
 
 interface BookmarksPanelProps {
@@ -14,8 +14,6 @@ interface BookmarksPanelProps {
   onJump: (index: number) => void;
   onDelete: (id: string) => void;
   onToggleBookmarkPin: (id: string) => void;
-  onStartReview: () => void;
-  reviewItemCount: number;
   onClose: () => void;
   getSnippet?: (index: number) => string;
 }
@@ -45,8 +43,6 @@ export const BookmarksPanel: React.FC<BookmarksPanelProps> = ({
   onJump,
   onDelete,
   onToggleBookmarkPin,
-  onStartReview,
-  reviewItemCount,
   onClose,
   getSnippet,
 }) => {
@@ -175,31 +171,6 @@ export const BookmarksPanel: React.FC<BookmarksPanelProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-
-        <div className="px-5 py-3 border-b border-text-primary/10 space-y-3">
-          <button
-            type="button"
-            onClick={onStartReview}
-            disabled={reviewItemCount === 0}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-accent-red/30 bg-accent-red/15 text-sm font-semibold text-text-primary hover:bg-accent-red/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Review session ({reviewItemCount})
-          </button>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary/70" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search notes, bookmarks, or excerpts…"
-              className="w-full rounded-lg border border-text-primary/10 bg-black/10 pl-10 pr-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors"
-              aria-label="Search notes and bookmarks"
-            />
-          </div>
-
-          {copyFeedback && <p className="text-xs text-text-secondary/80">{copyFeedback}</p>}
         </div>
 
         <div className="p-5 border-b border-text-primary/10 space-y-3">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Book, BookSettings, Bookmark, Note, ReaderMode, ReaderPreferences, ReviewItem, SessionSummary, SourceMeta } from './types';
+import { Book, BookSettings, Bookmark, Note, ReaderMode, ReaderPreferences, SessionSummary, SourceMeta } from './types';
 import { useRSVP } from './hooks/useRSVP';
 import {
   appendSessionSummary,
@@ -30,12 +30,9 @@ import { BionicFlowReader } from './components/BionicFlowReader';
 import { BionicControls } from './components/BionicControls';
 import { ThemeSelector } from './components/ThemeSelector';
 import { HelpOverlay } from './components/HelpOverlay';
-import { BookMarked, Trash2, Menu, PanelLeftClose, Download, Brain } from 'lucide-react';
+import { BookMarked, Trash2, Menu, PanelLeftClose, Download, ChartColumn } from 'lucide-react';
 import { BookmarksPanel } from './components/BookmarksPanel';
 import { LibrarySortMenu } from './components/LibrarySortMenu';
-
-const REVIEW_WINDOW_BEFORE = 6;
-const REVIEW_WINDOW_AFTER = 14;
 
 export default function App() {
   const [activeBook, setActiveBook] = useState<Book | null>(null);
@@ -91,16 +88,11 @@ export default function App() {
   const [sessionRewinds, setSessionRewinds] = useState(0);
   const [sessionBookmarksAdded, setSessionBookmarksAdded] = useState(0);
   const [sessionNotesAdded, setSessionNotesAdded] = useState(0);
-  const [isReviewMode, setIsReviewMode] = useState(false);
-  const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>([]);
-  const [reviewCursor, setReviewCursor] = useState(0);
   const [resumePromptBook, setResumePromptBook] = useState<Book | null>(null);
-  const [pendingReviewStart, setPendingReviewStart] = useState(false);
   const [sprintDurationMin, setSprintDurationMin] = useState<number | null>(null);
   const [sprintEndsAt, setSprintEndsAt] = useState<number | null>(null);
   const [showShortcutCoachmark, setShowShortcutCoachmark] = useState(false);
   const [showLongPressCoachmark, setShowLongPressCoachmark] = useState(false);
-  const reviewWpmRestoreRef = useRef<number | null>(null);
   const sessionStartRef = useRef<number | null>(null);
   const sessionWpmSamplesRef = useRef<number[]>([]);
   const hardSegmentIndexesRef = useRef<number[]>([]);
@@ -241,7 +233,7 @@ export default function App() {
     }
   };
 
-  const openBook = (book: Book, opts?: { restart?: boolean; review?: boolean }) => {
+  const openBook = (book: Book, opts?: { restart?: boolean }) => {
     const shouldRestart = Boolean(opts?.restart);
     let nextBook = book;
     if (shouldRestart) {
@@ -252,19 +244,12 @@ export default function App() {
     }
     setActiveBook(nextBook);
     setResumePromptBook(null);
-    if (opts?.review) {
-      setPendingReviewStart(true);
-    }
     // Enter Focus Mode
     setIsSidebarOpen(false);
   };
 
   const handleSelectBook = (book: Book) => {
-    const hasResumeChoices =
-      book.progressIndex > 0 ||
-      (book.settings?.bookmarks?.length || 0) > 0 ||
-      (book.settings?.notes?.length || 0) > 0;
-    if (hasResumeChoices) {
+    if (book.progressIndex > 0) {
       setResumePromptBook(book);
       return;
     }
@@ -274,7 +259,6 @@ export default function App() {
   const handleExitReader = () => {
     finalizeSession();
     if (rsvp.isPlaying) rsvp.togglePlay();
-    exitReviewMode();
     if (activeBook) {
       updateBookProgress(activeBook.id, rsvp.index);
       setLibrary(getLibrary());
@@ -439,71 +423,6 @@ export default function App() {
     );
   };
 
-  const buildReviewQueue = (): ReviewItem[] => {
-    const bookmarks = getActiveBookmarks().map((b) => ({
-      id: `bm_${b.id}`,
-      index: b.index,
-      reason: 'bookmark' as const,
-    }));
-    const notes = getActiveNotes().map((n) => ({
-      id: `note_${n.id}`,
-      index: n.index,
-      reason: 'note' as const,
-    }));
-    const rewinds = hardSegmentIndexesRef.current.slice(-20).map((idx, i) => ({
-      id: `rew_${idx}_${i}`,
-      index: idx,
-      reason: 'rewind' as const,
-    }));
-    const merged = [...notes, ...bookmarks, ...rewinds];
-    const uniqueByIndex = new Map<number, ReviewItem>();
-    for (const item of merged) {
-      if (!uniqueByIndex.has(item.index)) {
-        uniqueByIndex.set(item.index, item);
-      }
-    }
-    return [...uniqueByIndex.values()].sort((a, b) => a.index - b.index);
-  };
-
-  const startReviewMode = () => {
-    if (!activeBook) return;
-    const queue = buildReviewQueue();
-    if (!queue.length) return;
-    if (requestedMode !== 'rsvp') {
-      updateReaderSettings({ lastMode: 'rsvp' }, { mode: 'rsvp' });
-    }
-    setReviewQueue(queue);
-    setReviewCursor(0);
-    setIsReviewMode(true);
-    updateBookSettings(activeBook.id, { reviewQueue: queue });
-    setActiveBook((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        settings: {
-          ...(prev.settings || {}),
-          reviewQueue: queue,
-        },
-      };
-    });
-  };
-
-  const exitReviewMode = () => {
-    setIsReviewMode(false);
-    setReviewQueue([]);
-    setReviewCursor(0);
-    if (reviewWpmRestoreRef.current != null) {
-      rsvp.setWpm(reviewWpmRestoreRef.current);
-      reviewWpmRestoreRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    if (!pendingReviewStart || !activeBook) return;
-    startReviewMode();
-    setPendingReviewStart(false);
-  }, [pendingReviewStart, activeBook?.id]);
-
   const jumpToBookmark = (idx: number) => {
     rsvp.seek(idx);
     if (activeBook) {
@@ -537,6 +456,7 @@ export default function App() {
   const mode: ReaderMode = isCompactPortrait && requestedMode === 'rsvp_enhanced' ? 'rsvp' : requestedMode;
   const contextStrength = readerSettings.contextStrength;
   const bionicStrength = readerSettings.bionicStrength;
+  const bionicFontSize = readerSettings.bionicFontSize;
   const lineWidth = readerSettings.lineWidth;
   const showRsvpScrim = Boolean(activeBook && mode !== 'bionic_flow' && rsvp.isPlaying);
   // On touch devices (mobile), focus can "stick" after tapping buttons, which can accidentally
@@ -615,14 +535,11 @@ export default function App() {
   const isHeaderVisible = !activeBook ? true : isBionicMode ? isHeaderVisibleBionic : isUiVisible;
   const isFooterVisible = !activeBook ? true : isBionicMode ? isFooterVisibleBionic : isUiVisible;
   const isThemeVisible = !activeBook || (isBionicMode ? isFooterVisibleBionic : isUiVisible) || isThemeEngaged;
-  const currentReviewItem = isReviewMode ? reviewQueue[reviewCursor] : null;
-  const reviewableItemCount = activeBook ? buildReviewQueue().length : 0;
   const isAtBookEnd = Boolean(activeBook && rsvp.totalWords > 0 && rsvp.index >= rsvp.totalWords - 1);
   const showEndOfBookActions = Boolean(
     activeBook &&
       isAtBookEnd &&
       !rsvp.isPlaying &&
-      !isReviewMode &&
       !isSessionRecapOpen &&
       !resumePromptBook
   );
@@ -742,6 +659,11 @@ export default function App() {
   }, [activeBook?.id]);
 
   useEffect(() => {
+    setLastSessionSummary(activeBook?.settings?.lastSessionSummary ?? null);
+    setIsSessionRecapOpen(false);
+  }, [activeBook?.id]);
+
+  useEffect(() => {
     if (!activeBook) return;
     const prev = prevIndexRef.current;
     const next = rsvp.index;
@@ -797,7 +719,6 @@ export default function App() {
     });
     setLibrary(getLibrary());
     setLastSessionSummary(summary);
-    setIsSessionRecapOpen(true);
     setSessionWordsRead(0);
     setSessionRewinds(0);
     setSessionBookmarksAdded(0);
@@ -828,32 +749,6 @@ export default function App() {
     }
   }, [activeBook?.id, rsvp.index, rsvp.totalWords, rsvp.isPlaying]);
 
-  useEffect(() => {
-    if (!isReviewMode || !activeBook) return;
-    const queue = reviewQueue.length ? reviewQueue : (activeBook.settings?.reviewQueue || []);
-    if (!queue.length) {
-      exitReviewMode();
-      return;
-    }
-    if (reviewWpmRestoreRef.current == null) {
-      reviewWpmRestoreRef.current = rsvp.wpm;
-      rsvp.setWpm(Math.min(280, rsvp.wpm));
-    }
-    const item = queue[Math.min(reviewCursor, queue.length - 1)];
-    if (!item) return;
-    const start = Math.max(0, item.index - REVIEW_WINDOW_BEFORE);
-    rsvp.seek(start);
-    if (rsvp.isPlaying) rsvp.togglePlay();
-  }, [isReviewMode, reviewCursor, reviewQueue, activeBook?.id]);
-
-  useEffect(() => {
-    if (!isReviewMode || !rsvp.isPlaying) return;
-    const item = reviewQueue[reviewCursor];
-    if (!item) return;
-    if (rsvp.index >= item.index + REVIEW_WINDOW_AFTER) {
-      rsvp.togglePlay();
-    }
-  }, [isReviewMode, reviewQueue, reviewCursor, rsvp.index, rsvp.isPlaying]);
 
   const clearBionicHintTimers = () => {
     if (bionicHintFadeRef.current) {
@@ -1318,6 +1213,7 @@ export default function App() {
       lastMode: settings?.mode ?? defaults.lastMode,
       contextStrength: settings?.contextStrength ?? defaults.contextStrength,
       bionicStrength: settings?.bionicStrength ?? defaults.bionicStrength,
+      bionicFontSize: settings?.bionicFontSize ?? defaults.bionicFontSize,
       lineWidth: settings?.lineWidth ?? defaults.lineWidth,
       smartTimingEnabled: defaults.smartTimingEnabled,
       comfortModeEnabled: defaults.comfortModeEnabled,
@@ -1364,6 +1260,10 @@ export default function App() {
 
   const handleBionicStrengthChange = (strength: number) => {
     updateReaderSettings({ bionicStrength: strength }, { bionicStrength: strength });
+  };
+
+  const handleBionicFontSizeChange = (fontSize: number) => {
+    updateReaderSettings({ bionicFontSize: fontSize }, { bionicFontSize: fontSize });
   };
 
   const handleLineWidthChange = (width: ReaderPreferences['lineWidth']) => {
@@ -1633,8 +1533,7 @@ export default function App() {
                    <span className="group-hover:-translate-x-1 transition-transform">←</span> 
                    <span className="hidden sm:inline">Library</span>
                  </button>
-                 
-                 {/* Mode Toggle */}
+                  {/* Mode Toggle */}
                  <div className="justify-self-center">
                     <ModeToggle
                       mode={mode}
@@ -1684,6 +1583,18 @@ export default function App() {
 	                   )}
 	                   </div>
 	                   <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:justify-end">
+                       {lastSessionSummary && (
+	                     <button
+	                       type="button"
+	                       onClick={() => setIsSessionRecapOpen(true)}
+	                       className="h-9 px-3 flex items-center justify-center gap-2 rounded-lg bg-black/30 border border-text-primary/5 text-text-secondary hover:text-text-primary hover:border-text-primary/20 transition-colors text-xs font-semibold uppercase tracking-widest"
+	                       aria-label="Session review"
+	                       title="Session review"
+	                     >
+                         <ChartColumn className="w-3.5 h-3.5" />
+                         <span className="hidden sm:inline">Session</span>
+	                     </button>
+                       )}
 	                     <button
 	                       type="button"
 	                       onClick={() => setIsHelpOpen(true)}
@@ -1692,15 +1603,6 @@ export default function App() {
 	                       title="Help"
 	                     >
 	                       ?
-	                     </button>
-	                     <button
-	                       type="button"
-	                       onClick={startReviewMode}
-	                       className="w-9 h-9 flex items-center justify-center rounded-lg bg-black/30 border border-text-primary/5 text-text-secondary hover:text-text-primary hover:border-text-primary/20 transition-colors"
-	                       aria-label="Review mode"
-	                       title="Review mode"
-	                     >
-	                       <Brain className="w-4 h-4" />
 	                     </button>
 	                     <button
 	                       type="button"
@@ -1725,42 +1627,6 @@ export default function App() {
 	                </div>
 	              </div>
 
-              {isReviewMode && currentReviewItem && (
-                <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20">
-                  <div className="flex items-center gap-2 rounded-full border border-accent-red/30 bg-panel-bg/80 px-3 py-2 backdrop-blur-md shadow-xl">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                      Review {reviewCursor + 1}/{reviewQueue.length}
-                    </span>
-                    <span className="text-[11px] text-text-primary/90">
-                      {currentReviewItem.reason}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setReviewCursor((prev) => Math.max(0, prev - 1))}
-                      className="px-2 py-1 rounded-full text-[10px] font-semibold text-text-secondary hover:text-text-primary hover:bg-text-primary/10 transition-colors"
-                      disabled={reviewCursor === 0}
-                    >
-                      Prev
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReviewCursor((prev) => Math.min(reviewQueue.length - 1, prev + 1))}
-                      className="px-2 py-1 rounded-full text-[10px] font-semibold text-text-secondary hover:text-text-primary hover:bg-text-primary/10 transition-colors"
-                      disabled={reviewCursor >= reviewQueue.length - 1}
-                    >
-                      Next
-                    </button>
-                    <button
-                      type="button"
-                      onClick={exitReviewMode}
-                      className="px-2 py-1 rounded-full text-[10px] font-semibold text-text-secondary hover:text-text-primary hover:bg-text-primary/10 transition-colors"
-                    >
-                      Exit
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Reader Area */}
 	              <div
                   className="flex-1 w-full min-h-0 relative z-10"
@@ -1774,7 +1640,7 @@ export default function App() {
                         <div className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">End of book</div>
                         <h3 className="mt-2 text-2xl font-header font-bold text-text-primary">You made it through {activeBook?.title}</h3>
                         <p className="mt-2 text-sm text-text-secondary">
-                          Replay from the top, review your saved spots, or head back to the library.
+                          Replay from the top or head back to the library.
                         </p>
                         <div className="mt-4 grid gap-2">
                           <button
@@ -1783,14 +1649,6 @@ export default function App() {
                             className="w-full px-4 py-2 rounded-lg text-sm font-bold bg-accent-red text-white shadow-glow hover:bg-accent-red/90 transition-colors"
                           >
                             Replay from start
-                          </button>
-                          <button
-                            type="button"
-                            onClick={startReviewMode}
-                            disabled={reviewableItemCount === 0}
-                            className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Review saved items ({reviewableItemCount})
                           </button>
                           <button
                             type="button"
@@ -1815,6 +1673,7 @@ export default function App() {
                       currentIndex={rsvp.index}
                       totalWords={rsvp.totalWords}
                       bionicStrength={bionicStrength}
+                      bionicFontSize={bionicFontSize}
                       lineWidth={lineWidth}
                       initialScrollPercent={activeBook.settings?.bionicScrollPercent ?? bionicScrollPercentRef.current}
                       onProgressIndex={rsvp.seek}
@@ -1862,11 +1721,13 @@ export default function App() {
                       {controlsPrevMode === 'bionic_flow' ? (
                         <BionicControls
                           bionicStrength={bionicStrength}
+                          bionicFontSize={bionicFontSize}
                           lineWidth={lineWidth}
                           progressPercent={Math.min(100, Math.max(0, Math.round((rsvp.index / Math.max(1, rsvp.totalWords)) * 100)))}
                           currentIndex={rsvp.index}
                           totalWords={rsvp.totalWords}
                           onStrengthChange={handleBionicStrengthChange}
+                          onFontSizeChange={handleBionicFontSizeChange}
                           onLineWidthChange={handleLineWidthChange}
                         />
 	                      ) : (
@@ -1900,11 +1761,13 @@ export default function App() {
                     {mode === 'bionic_flow' ? (
                       <BionicControls
                         bionicStrength={bionicStrength}
+                        bionicFontSize={bionicFontSize}
                         lineWidth={lineWidth}
                         progressPercent={Math.min(100, Math.max(0, Math.round((rsvp.index / Math.max(1, rsvp.totalWords)) * 100)))}
                         currentIndex={rsvp.index}
                         totalWords={rsvp.totalWords}
                         onStrengthChange={handleBionicStrengthChange}
+                        onFontSizeChange={handleBionicFontSizeChange}
                         onLineWidthChange={handleLineWidthChange}
                       />
 	                    ) : (
@@ -1986,8 +1849,6 @@ export default function App() {
           onJump={jumpToBookmark}
           onDelete={deleteBookmark}
           onToggleBookmarkPin={toggleBookmarkPin}
-          onStartReview={startReviewMode}
-          reviewItemCount={reviewableItemCount}
           onClose={() => setIsBookmarksOpen(false)}
           getSnippet={getBookmarkSnippet}
         />
@@ -2034,24 +1895,13 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="mt-4 flex justify-end">
                 <button
                   type="button"
                   onClick={() => setIsSessionRecapOpen(false)}
                   className="px-4 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-text-primary/5 transition-colors"
                 >
                   Close
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSessionRecapOpen(false);
-                    startReviewMode();
-                  }}
-                  disabled={reviewableItemCount === 0}
-                  className="px-4 py-2 rounded-lg text-sm font-bold bg-accent-red text-white shadow-glow hover:bg-accent-red/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Review now
                 </button>
               </div>
             </div>
@@ -2078,13 +1928,6 @@ export default function App() {
                   className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 transition-colors"
                 >
                   Resume
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openBook(resumePromptBook, { review: true })}
-                  className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 transition-colors"
-                >
-                  Review bookmarks/notes
                 </button>
                 <button
                   type="button"

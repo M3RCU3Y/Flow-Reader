@@ -36,6 +36,7 @@ export interface ReaderPreferences {
   lastMode: ReaderMode;
   contextStrength: ContextStrength;
   bionicStrength: number;
+  bionicFontSize: number;
   lineWidth: LineWidth;
   smartTimingEnabled?: boolean;
   comfortModeEnabled?: boolean;
@@ -45,11 +46,11 @@ export interface BookSettings {
   mode?: ReaderMode;
   contextStrength?: ContextStrength;
   bionicStrength?: number;
+  bionicFontSize?: number;
   lineWidth?: LineWidth;
   bionicScrollPercent?: number;
   bookmarks?: Bookmark[];
   notes?: Note[];
-  reviewQueue?: ReviewItem[];
   sourceMeta?: SourceMeta;
   lastSessionSummary?: SessionSummary;
 }
@@ -71,11 +72,6 @@ export interface Note {
   pinnedAt?: number;
 }
 
-export interface ReviewItem {
-  id: string;
-  index: number;
-  reason: 'bookmark' | 'note' | 'rewind';
-}
 
 export interface SessionSummary {
   id: string;

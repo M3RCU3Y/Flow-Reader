@@ -1,4 +1,4 @@
-import { Book, BookSettings, Note, ReviewItem, SessionSummary } from '../types';
+import { Book, BookSettings, Note, SessionSummary } from '../types';
 
 const STORAGE_KEY = 'focus_reader_library';
 const PREFS_KEY = 'focus_reader_prefs';
@@ -31,7 +31,6 @@ const normalizeBook = (book: Book): Book => {
     ...settings,
     bookmarks: Array.isArray(settings.bookmarks) ? settings.bookmarks : [],
     notes: Array.isArray(settings.notes) ? settings.notes : [],
-    reviewQueue: Array.isArray(settings.reviewQueue) ? settings.reviewQueue : [],
   };
 
   return {
@@ -118,10 +117,6 @@ export const getBookNotes = (book: Book | null): Note[] => {
   return book.settings.notes;
 };
 
-export const getBookReviewQueue = (book: Book | null): ReviewItem[] => {
-  if (!book?.settings?.reviewQueue || !Array.isArray(book.settings.reviewQueue)) return [];
-  return book.settings.reviewQueue;
-};
 
 export const getAllSessionSummaries = (): SessionSummary[] => {
   const parsed = parseJson<SessionSummary[]>(SESSION_SUMMARIES_KEY, []);

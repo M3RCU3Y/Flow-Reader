@@ -6,6 +6,7 @@ interface BionicFlowReaderProps {
   currentIndex: number;
   totalWords: number;
   bionicStrength: number;
+  bionicFontSize: number;
   lineWidth: LineWidth;
   initialScrollPercent?: number | null;
   onProgressIndex: (index: number) => void;
@@ -69,11 +70,20 @@ const getWidthClass = (lineWidth: LineWidth) => {
   }
 };
 
-const getTypographyClass = (lineWidth: LineWidth) => {
-  if (lineWidth === 'focused') {
-    return 'text-[18px] leading-[1.9] tracking-[0.01em]';
-  }
-  return 'text-lg leading-relaxed';
+const getTypographyStyle = (lineWidth: LineWidth, fontSize: number): React.CSSProperties => {
+  const clampedFontSize = clamp(fontSize, 18, 42);
+  const lineHeight =
+    lineWidth === 'focused'
+      ? 1.95
+      : lineWidth === 'wide'
+        ? 1.72
+        : 1.8;
+
+  return {
+    fontSize: `${clampedFontSize}px`,
+    lineHeight,
+    letterSpacing: lineWidth === 'focused' ? '0.01em' : '0',
+  };
 };
 
 const BionicFlowReaderImpl: React.FC<BionicFlowReaderProps> = ({
@@ -81,6 +91,7 @@ const BionicFlowReaderImpl: React.FC<BionicFlowReaderProps> = ({
   currentIndex,
   totalWords,
   bionicStrength,
+  bionicFontSize,
   lineWidth,
   initialScrollPercent,
   onProgressIndex,
@@ -356,7 +367,7 @@ const BionicFlowReaderImpl: React.FC<BionicFlowReaderProps> = ({
 
   const strength = clamp(bionicStrength, 0, 0.8);
   const widthClass = getWidthClass(lineWidth);
-  const typographyClass = getTypographyClass(lineWidth);
+  const typographyStyle = getTypographyStyle(lineWidth, bionicFontSize);
 
   const renderedParagraphs = useMemo(() => {
     const paragraphStyle: React.CSSProperties = {
@@ -406,7 +417,10 @@ const BionicFlowReaderImpl: React.FC<BionicFlowReaderProps> = ({
         onScroll={handleScroll}
         className="h-full w-full min-h-0 overflow-y-auto px-8 pb-8 pt-24 sm:pt-28 lg:pt-32 scrollbar-thin scrollbar-thumb-text-primary/10 scrollbar-track-transparent"
       >
-        <div className={`mx-auto w-full ${widthClass} font-header ${typographyClass} text-text-primary/70`}>
+        <div
+          className={`mx-auto w-full ${widthClass} font-header text-text-primary/70`}
+          style={typographyStyle}
+        >
           {renderedParagraphs}
         </div>
       </div>
@@ -420,6 +434,7 @@ export const BionicFlowReader = React.memo(BionicFlowReaderImpl, (prev, next) =>
   if (prev.text !== next.text) return false;
   if (prev.totalWords !== next.totalWords) return false;
   if (prev.bionicStrength !== next.bionicStrength) return false;
+  if (prev.bionicFontSize !== next.bionicFontSize) return false;
   if (prev.lineWidth !== next.lineWidth) return false;
   if (prev.onProgressIndex !== next.onProgressIndex) return false;
   if (prev.onScrollPercentChange !== next.onScrollPercentChange) return false;

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, Loader2, ArrowRight, X, Maximize2 } from 'lucide-react';
+import { Upload, Loader2, ArrowRight, X, Maximize2, ChevronDown } from 'lucide-react';
 import { extractTextFromPDF } from '../services/pdfService';
 import {
   cleanImportedText,
@@ -607,23 +607,29 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       </div>
 
       <div className="mt-4 flex flex-col sm:flex-row items-stretch justify-center gap-2">
-        <select
-          value={urlProfile}
-          onChange={(e) => {
-            setUrlProfile(e.target.value as UrlImportProfile);
-            setUrlImportMessage('');
-            setUrlPreview(null);
-          }}
-          disabled={status === 'processing'}
-          className="rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
-          aria-label="URL import profile"
-        >
-          {URL_IMPORT_PROFILES.map((profile) => (
-            <option key={profile.value} value={profile.value} className="bg-panel-bg text-text-primary">
-              {profile.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={urlProfile}
+            onChange={(e) => {
+              setUrlProfile(e.target.value as UrlImportProfile);
+              setUrlImportMessage('');
+              setUrlPreview(null);
+            }}
+            disabled={status === 'processing'}
+            className="min-w-[7.25rem] appearance-none rounded-lg border border-text-primary/10 bg-black/10 pl-3 pr-10 py-2 text-sm text-text-primary focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
+            aria-label="URL import profile"
+          >
+            {URL_IMPORT_PROFILES.map((profile) => (
+              <option key={profile.value} value={profile.value} className="bg-panel-bg text-text-primary">
+                {profile.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary"
+            aria-hidden="true"
+          />
+        </div>
         <input
           value={urlDraft}
           onChange={(e) => {
