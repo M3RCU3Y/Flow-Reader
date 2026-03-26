@@ -33,6 +33,7 @@ import { HelpOverlay } from './components/HelpOverlay';
 import { BookMarked, Trash2, Menu, PanelLeftClose, Download, ChartColumn } from 'lucide-react';
 import { BookmarksPanel } from './components/BookmarksPanel';
 import { LibrarySortMenu } from './components/LibrarySortMenu';
+import { BrandMark } from './components/BrandMark';
 
 export default function App() {
   const [activeBook, setActiveBook] = useState<Book | null>(null);
@@ -224,7 +225,7 @@ export default function App() {
   };
 
   const handleClearData = () => {
-    if (confirm('Clear all Focus Reader data on this device? This removes your library, preferences, and themes.')) {
+    if (confirm('Clear all Flow Reader data on this device? This removes your library, preferences, and themes.')) {
       clearAllData();
       setLibrary([]);
       setActiveBook(null);
@@ -286,7 +287,7 @@ export default function App() {
 
   const exportActiveBook = () => {
     if (!activeBook) return;
-    const rawName = (activeBook.title || 'focus-reader').trim() || 'focus-reader';
+    const rawName = (activeBook.title || 'flow-reader').trim() || 'flow-reader';
     const safeName = rawName.replace(/[^a-z0-9._-]+/gi, '_').slice(0, 80);
     const blob = new Blob([activeBook.text || ''], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -1390,14 +1391,11 @@ export default function App() {
           ${isLibraryDrawer ? '' : isSidebarOpen ? 'w-80' : 'w-0'}
         `}
       >
-        
         {/* Sidebar Header with Toggle inside */}
         <div className="p-6 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-             <div className="w-8 h-8 bg-accent-red rounded-sm flex items-center justify-center text-white font-header font-bold text-xl shadow-glow">
-               F
-             </div>
-             <h1 className="font-header text-xl font-bold tracking-tight text-text-primary whitespace-nowrap">Focus Reader</h1>
+             <BrandMark className="w-8 h-8 shrink-0" />
+             <h1 className="font-header text-xl font-bold tracking-tight text-text-primary whitespace-nowrap">Flow Reader</h1>
           </div>
           <button onClick={toggleSidebar} className="text-text-secondary hover:text-text-primary transition-colors">
             <PanelLeftClose className="w-5 h-5" />

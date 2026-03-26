@@ -1,6 +1,6 @@
-# Focus Reader
+# Flow Reader
 
-Focus Reader is a local-first speed reading app with:
+Flow Reader is a local-first speed reading app with:
 - RSVP (word-by-word)
 - RSVP+ (context-enhanced, desktop/landscape)
 - Bionic Flow (scrollable reading with a “zen” UI reveal)
@@ -24,5 +24,5 @@ Open the local URL printed by Vite (usually `http://localhost:3001`).
 
 ## Notes
 - The library, preferences, and themes use local browser storage.
-- “Clear Data” removes Focus Reader data from this device.
+- “Clear Data” removes Flow Reader data from this device.
 - The app is PWA-enabled (installable). Offline works best after the first load (assets are cached).

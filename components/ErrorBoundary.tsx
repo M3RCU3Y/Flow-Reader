@@ -18,7 +18,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Keep a breadcrumb in the console for debugging; UI stays user-friendly.
-    console.error('Focus Reader crashed:', error, errorInfo);
+    console.error('Flow Reader crashed:', error, errorInfo);
     this.setState({ error, errorInfo });
   }
 
@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <div className="w-full max-w-xl rounded-2xl bg-panel-bg border border-text-primary/10 shadow-2xl p-6 sm:p-7">
           <h1 className="font-header text-2xl font-bold">Something went wrong</h1>
           <p className="mt-2 text-text-secondary text-sm">
-            Focus Reader hit an unexpected error. Your data is still stored locally in your browser.
+            Flow Reader hit an unexpected error. Your data is still stored locally in your browser.
           </p>
 
           <div className="mt-5 flex gap-2 justify-end">

@@ -1,7 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#ff4757"/>
-  <g fill="#ffffff" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial" font-weight="800">
-    <text x="256" y="330" text-anchor="middle" font-size="300">F</text>
-  </g>
+  <defs>
+    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(176 128) rotate(50) scale(368)">
+      <stop stop-color="#28242D"/>
+      <stop offset="0.58" stop-color="#16141C"/>
+      <stop offset="1" stop-color="#0D0C12"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 256) rotate(90) scale(224)">
+      <stop stop-color="#FFB9A3" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FFB9A3" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stroke" x1="162" y1="128" x2="350" y2="364" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE2D3"/>
+      <stop offset="0.42" stop-color="#FFA487"/>
+      <stop offset="1" stop-color="#FF6E73"/>
+    </linearGradient>
+    <linearGradient id="detail" x1="242" y1="208" x2="336" y2="322" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD5C3"/>
+      <stop offset="1" stop-color="#FF9A7E"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="224" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="224" fill="url(#halo)"/>
+  <path d="M140 256C140 189 193 131 264 131C329 131 372 168 372 217C372 256 346 285 299 297L351 354" fill="none" stroke="url(#stroke)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M173 163V355" fill="none" stroke="url(#stroke)" stroke-width="38" stroke-linecap="round"/>
+  <path d="M173 245H282" fill="none" stroke="url(#detail)" stroke-width="34" stroke-linecap="round"/>
+  <path d="M144 256C144 325 197 381 265 381C290 381 313 374 333 361" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="11" stroke-linecap="round"/>
 </svg>
-

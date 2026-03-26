@@ -136,7 +136,7 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({
             </div>
             <p className="mt-2 text-sm text-text-secondary">
               Your library, preferences, and themes are saved in your browser storage on this device.
-              Use <span className="text-text-primary/80">Clear Data</span> in the Library to remove all Focus Reader data.
+              Use <span className="text-text-primary/80">Clear Data</span> in the Library to remove all Flow Reader data.
             </p>
             <p className="mt-2 text-sm text-text-secondary">
               URL import works for most pages, but some sites block automated readers. Open the page in a normal tab,

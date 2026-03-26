@@ -171,9 +171,9 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   const triggerFilePicker = () => fileInputRef.current?.click();
 
   const loadDemo = () => {
-    const demoTitle = 'Demo: Focus Reader';
+    const demoTitle = 'Demo: Flow Reader';
     const demoText =
-      `Welcome to Focus Reader.\n\n` +
+      `Welcome to Flow Reader.\n\n` +
       `This is a short demo document so you can try RSVP and Bionic mode right away.\n\n` +
       `RSVP tip: Start around 250–350 WPM, then inch upward. If you find yourself rewinding, slow down 10–20%.\n\n` +
       `Bionic tip: The UI is hidden by default. Hover/touch the top edge to reveal the header, and the bottom edge to reveal settings.\n\n` +

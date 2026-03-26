@@ -20,8 +20,8 @@ export default defineConfig(({ mode }) => {
           registerType: 'autoUpdate',
           includeAssets: ['pwa-icon.svg', 'pwa-maskable.svg'],
           manifest: {
-            name: 'Focus Reader',
-            short_name: 'Focus Reader',
+            name: 'Flow Reader',
+            short_name: 'Flow Reader',
             description: 'Local-first RSVP + Bionic speed reading with themes and robust imports.',
             theme_color: '#0f0f10',
             background_color: '#0f0f10',
