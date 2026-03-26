@@ -59,6 +59,67 @@
       ::-webkit-scrollbar-thumb { background: rgba(var(--color-text-secondary), 0.35); border-radius: 3px; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(var(--color-text-secondary), 0.5); }
 
+      @keyframes idleBlobA {
+        0%, 100% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); opacity: 0.95; }
+        50% { transform: translate3d(-18px, 16px, 0) scale(1.04) rotate(-1.5deg); opacity: 1; }
+      }
+
+      @keyframes idleBlobB {
+        0%, 100% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); opacity: 0.7; }
+        50% { transform: translate3d(24px, -12px, 0) scale(1.06) rotate(1.8deg); opacity: 0.86; }
+      }
+
+      @keyframes idleBlobC {
+        0%, 100% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); opacity: 0.52; }
+        50% { transform: translate3d(-12px, -18px, 0) scale(1.08) rotate(-1deg); opacity: 0.68; }
+      }
+
+      @keyframes idleSheen {
+        0%, 100% { transform: translate3d(0, 0, 0) scaleX(1); opacity: 0.22; }
+        50% { transform: translate3d(0, 10px, 0) scaleX(1.06); opacity: 0.3; }
+      }
+
+      .idle-backdrop-svg {
+        opacity: 0.92;
+      }
+
+      .idle-blob {
+        transform-origin: 50% 42%;
+        mix-blend-mode: screen;
+      }
+
+      .idle-blob-a {
+        animation: idleBlobA 24s ease-in-out infinite;
+      }
+
+      .idle-blob-b {
+        animation: idleBlobB 30s ease-in-out infinite;
+      }
+
+      .idle-blob-c {
+        animation: idleBlobC 28s ease-in-out infinite;
+      }
+
+      .idle-sheen {
+        mix-blend-mode: screen;
+        animation: idleSheen 18s ease-in-out infinite;
+      }
+
+      .idle-content-veil {
+        background:
+          radial-gradient(ellipse at center, rgba(10, 10, 12, 0.82) 0%, rgba(10, 10, 12, 0.68) 26%, rgba(10, 10, 12, 0.32) 56%, transparent 84%);
+        filter: blur(26px);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .idle-blob-a,
+        .idle-blob-b,
+        .idle-blob-c,
+        .idle-sheen {
+          animation: none;
+        }
+      }
+
       /* Prevent iOS/Android tap flash on interactive elements */
       * { -webkit-tap-highlight-color: transparent; }
     </style>

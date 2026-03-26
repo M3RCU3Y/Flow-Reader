@@ -34,6 +34,7 @@ import { BookMarked, Trash2, Menu, PanelLeftClose, Download, ChartColumn } from 
 import { BookmarksPanel } from './components/BookmarksPanel';
 import { LibrarySortMenu } from './components/LibrarySortMenu';
 import { BrandMark } from './components/BrandMark';
+import { IdleBackdrop } from './components/IdleBackdrop';
 
 export default function App() {
   const [activeBook, setActiveBook] = useState<Book | null>(null);
@@ -1486,22 +1487,29 @@ export default function App() {
           
 	          {!activeBook ? (
 	            // STATE A: Idle / Input
+              <>
+                <IdleBackdrop />
 	            <div
-                className="w-full max-w-3xl px-8 fade-in animate-in slide-in-from-bottom-4 duration-700"
-                style={
-                  showDashboardHamburger && isNarrowViewport
-                    ? { paddingTop: 'calc(env(safe-area-inset-top) + 80px)' }
-                    : undefined
-                }
-              >
-	               <TextInput
-	                 onStartReading={handleStartNew}
-	                 onOpenHelp={() => setIsHelpOpen(true)}
-	                 onTryDemo={() => {
-                   if (!suppressHelp) setIsHelpOpen(true);
-                 }}
-               />
-            </div>
+                  className="relative z-10 w-full max-w-3xl px-8 fade-in animate-in slide-in-from-bottom-4 duration-700"
+                  style={
+                    showDashboardHamburger && isNarrowViewport
+                      ? { paddingTop: 'calc(env(safe-area-inset-top) + 80px)' }
+                      : undefined
+                  }
+                >
+                  <div
+                    className="pointer-events-none absolute left-1/2 top-[-4.5rem] h-[34rem] w-[min(64rem,96vw)] -translate-x-1/2 rounded-[999px] idle-content-veil"
+                    aria-hidden="true"
+                  />
+	                 <TextInput
+	                   onStartReading={handleStartNew}
+	                   onOpenHelp={() => setIsHelpOpen(true)}
+	                   onTryDemo={() => {
+                     if (!suppressHelp) setIsHelpOpen(true);
+                   }}
+                 />
+              </div>
+              </>
           ) : (
             // STATE B: Reading Mode (Full Screen Focus)
             <>

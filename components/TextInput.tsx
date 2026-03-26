@@ -498,13 +498,13 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   return (
     <div className="w-full animate-in fade-in zoom-in-95 duration-500">
       
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-header font-bold text-text-primary mb-2">
+      <div className="relative z-10 text-center mb-10">
+        <h2 className="text-3xl font-header font-bold text-text-primary mb-2 drop-shadow-[0_10px_28px_rgba(0,0,0,0.5)]">
           Read <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">faster</span>,
           retain <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">more</span>.
         </h2>
-        <p className="text-text-secondary">Paste your text below or upload a document to begin.</p>
-        <p className="text-xs text-text-secondary/70 mt-3">
+        <p className="text-text-primary/72 drop-shadow-[0_6px_18px_rgba(0,0,0,0.42)]">Paste your text below or upload a document to begin.</p>
+        <p className="text-xs text-text-secondary/80 mt-3 drop-shadow-[0_4px_14px_rgba(0,0,0,0.35)]">
           Your library and preferences stay on this device (local browser storage).
         </p>
       </div>
