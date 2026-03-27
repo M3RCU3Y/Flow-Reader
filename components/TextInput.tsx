@@ -607,7 +607,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       </div>
 
       <div className="mt-4 flex flex-col sm:flex-row items-stretch justify-center gap-2">
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <select
             value={urlProfile}
             onChange={(e) => {
@@ -616,7 +616,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
               setUrlPreview(null);
             }}
             disabled={status === 'processing'}
-            className="min-w-[7.25rem] appearance-none rounded-lg border border-text-primary/10 bg-black/10 pl-3 pr-10 py-2 text-sm text-text-primary focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
+            className="w-full min-w-0 sm:min-w-[7.25rem] appearance-none rounded-xl border border-text-primary/10 bg-panel-bg/55 pl-4 pr-11 py-3 text-sm font-medium text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
             aria-label="URL import profile"
           >
             {URL_IMPORT_PROFILES.map((profile) => (
@@ -641,7 +641,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
             setUrlPreview(null);
           }}
           placeholder="Paste an article URL…"
-          className="w-full sm:w-[28rem] rounded-lg border border-text-primary/10 bg-black/10 px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
+          className="w-full sm:w-[28rem] rounded-xl border border-text-primary/10 bg-black/10 px-4 py-3 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
           aria-label="Article URL"
           disabled={status === 'processing'}
         />
@@ -649,7 +649,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
           type="button"
           onClick={importFromUrl}
           disabled={status === 'processing' || !urlDraft.trim()}
-          className="px-4 py-2 rounded-lg text-sm font-bold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 hover:border-text-primary/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="px-4 py-3 rounded-xl text-sm font-bold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 hover:border-text-primary/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Import URL
         </button>

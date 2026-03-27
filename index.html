@@ -149,6 +149,57 @@
         filter: blur(24px);
       }
 
+      @media (max-width: 768px) {
+        .idle-light {
+          filter: blur(54px);
+        }
+
+        .idle-light-left {
+          left: -18%;
+          top: 18%;
+          width: 16rem;
+          height: 25rem;
+          opacity: 0.42;
+        }
+
+        .idle-light-center {
+          top: 12%;
+          width: 34rem;
+          height: 24rem;
+          background: radial-gradient(ellipse at center, rgba(255, 198, 180, 0.22) 0%, rgba(255, 136, 108, 0.1) 36%, rgba(255, 136, 108, 0.03) 60%, transparent 80%);
+        }
+
+        .idle-light-right {
+          right: -22%;
+          top: 26%;
+          width: 17rem;
+          height: 24rem;
+          opacity: 0.42;
+        }
+
+        .idle-light-floor {
+          bottom: 14%;
+          width: 30rem;
+          height: 8rem;
+          filter: blur(52px);
+          opacity: 0.34;
+        }
+
+        .idle-sheen-strip {
+          top: 6%;
+          width: 24rem;
+          height: 16rem;
+          filter: blur(42px);
+          opacity: 0.24;
+        }
+
+        .idle-content-veil {
+          background:
+            radial-gradient(ellipse at center, rgba(10, 10, 12, 0.66) 0%, rgba(10, 10, 12, 0.46) 30%, rgba(10, 10, 12, 0.14) 62%, transparent 88%);
+          filter: blur(18px);
+        }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         .idle-light-left,
         .idle-light-center,
