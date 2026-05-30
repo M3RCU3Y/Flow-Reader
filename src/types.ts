@@ -9,17 +9,6 @@ export interface Book {
   settings?: BookSettings;
 }
 
-export interface ReadingStats {
-  totalWordsRead: number;
-  sessionMinutes: number;
-}
-
-export interface RSVPState {
-  isPlaying: boolean;
-  wpm: number;
-  currentWordIndex: number;
-}
-
 export type ProcessingStatus = 'idle' | 'processing' | 'error' | 'success';
 
 export type ReaderMode = 'rsvp' | 'rsvp_enhanced' | 'bionic_flow';

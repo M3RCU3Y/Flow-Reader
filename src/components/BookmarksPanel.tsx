@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bookmark, Copy, Pin, PinOff, Search, Trash2, X, CornerDownLeft, MessageSquare, Pencil, Check } from 'lucide-react';
+import { Bookmark, Copy, Pin, PinOff, Trash2, X, CornerDownLeft, MessageSquare, Pencil, Check } from 'lucide-react';
 import type { Bookmark as BookmarkType, Note } from '../types';
 
 interface BookmarksPanelProps {

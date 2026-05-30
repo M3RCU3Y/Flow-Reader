@@ -449,9 +449,6 @@ export default function App() {
     initialWpm: 300,
     smartTimingEnabled: readerSettings.smartTimingEnabled ?? true,
     comfortModeEnabled: readerSettings.comfortModeEnabled ?? true,
-    onProgress: (idx) => {
-       // local update
-    }
   });
 
   const requestedMode = readerSettings.lastMode;

@@ -1,4 +1,4 @@
-import { Book, BookSettings, Note, SessionSummary } from '../types';
+import { Book, BookSettings, SessionSummary } from '../types';
 
 const STORAGE_KEY = 'focus_reader_library';
 const PREFS_KEY = 'focus_reader_prefs';
@@ -96,10 +96,6 @@ export const deleteBook = (id: string): Book[] => {
   return library;
 };
 
-export const clearLibrary = (): void => {
-  localStorage.removeItem(STORAGE_KEY);
-};
-
 export const clearAllData = (): void => {
   // Local-first promise: clear everything this app stores.
   localStorage.removeItem(STORAGE_KEY);
@@ -112,12 +108,6 @@ export const clearAllData = (): void => {
   localStorage.removeItem(STUDY_GOAL_KEY);
 };
 
-export const getBookNotes = (book: Book | null): Note[] => {
-  if (!book?.settings?.notes || !Array.isArray(book.settings.notes)) return [];
-  return book.settings.notes;
-};
-
-
 export const getAllSessionSummaries = (): SessionSummary[] => {
   const parsed = parseJson<SessionSummary[]>(SESSION_SUMMARIES_KEY, []);
   return parsed
@@ -125,13 +115,8 @@ export const getAllSessionSummaries = (): SessionSummary[] => {
     .sort((a, b) => b.endedAt - a.endedAt);
 };
 
-export const getSessionSummariesForBook = (bookId: string): SessionSummary[] => {
-  return getAllSessionSummaries().filter((s) => s.bookId === bookId);
-};
-
 export const appendSessionSummary = (summary: SessionSummary): void => {
   const list = getAllSessionSummaries();
   const next = [summary, ...list].slice(0, 500);
   localStorage.setItem(SESSION_SUMMARIES_KEY, JSON.stringify(next));
 };
-
