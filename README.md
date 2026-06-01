@@ -1,15 +1,25 @@
 # Flow Reader
 
-Flow Reader is a local-first speed reading app with:
-- RSVP (word-by-word)
-- RSVP+ (context-enhanced, desktop/landscape)
-- Bionic Flow (scrollable reading with a “zen” UI reveal)
-- Theme Studio (presets + custom themes)
-- PDF import that extracts text reliably, with OCR fallback for scanned PDFs
-- DOCX import
-- URL import for articles (uses a public text extraction proxy to avoid CORS issues)
+Flow Reader is a local-first reading workspace for moving through long text with speed, focus, and control. It combines RSVP, Bionic Flow, document imports, themes, bookmarks, notes, and session summaries in a polished browser app.
 
 Everything is stored locally in your browser (no accounts, no sync).
+
+## Live App
+
+https://m3rcu3y.github.io/Flow-Reader/
+
+## Features
+
+- RSVP word-by-word reading with smart timing and comfort controls.
+- RSVP+ for context-enhanced reading on desktop and landscape layouts.
+- Bionic Flow for scrollable, focused reading with progress-aware navigation.
+- PDF import with text extraction, password handling, cancellation, and OCR fallback for scanned pages.
+- DOCX, TXT, pasted text, and article URL import.
+- URL cleanup preview for removing page chrome, forum noise, references, and long raw links.
+- Local library with source badges, progress persistence, sorting, and filtering.
+- Bookmarks, notes, manual session recap, focus sprint controls, and export.
+- Theme Studio with presets and custom themes.
+- Installable PWA behavior after the first load.
 
 ## Project Map
 
@@ -41,4 +51,4 @@ npm run check
 ## Notes
 - The library, preferences, and themes use local browser storage.
 - “Clear Data” removes Flow Reader data from this device.
-- The app is PWA-enabled (installable). Offline works best after the first load (assets are cached).
+- Offline works best after the first load because app assets are cached by the PWA service worker.
