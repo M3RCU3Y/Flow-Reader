@@ -21,8 +21,7 @@ export const RSVPEnhancedReader: React.FC<RSVPEnhancedReaderProps> = ({
   isUiVisible = true,
   fitToWidth = false,
 }) => {
-  // Context selector UI lives in `ControlCenter` now (above the play button), but we still
-  // keep these props for future-proofing and to avoid larger refactors in App.
+  // Context controls moved to ControlCenter; keep these props until App is simplified.
   void onContextStrengthChange;
   void isUiVisible;
 

@@ -108,7 +108,7 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({
           <section className="rounded-xl border border-text-primary/10 bg-black/15 p-4 sm:p-5">
             <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
               <MousePointer2 className="w-4 h-4 text-text-secondary" />
-              Bionic Mode (Zen UI)
+              Bionic mode controls
             </div>
             <p className="mt-2 text-sm text-text-secondary">
               In Bionic mode, the UI stays hidden by default. Reach for it when you need it:

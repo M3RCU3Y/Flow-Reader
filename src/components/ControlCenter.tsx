@@ -66,7 +66,6 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
 	    return () => window.clearInterval(t);
 	  }, [sprintEndsAt]);
 	  
-	  // Calculate remaining time
 	  const currentWordNumber = total > 0 ? Math.min(progress + 1, total) : 0;
 	  const wordsLeft = Math.max(0, total - progress);
 	  const minutesLeft = Math.ceil(wordsLeft / wpm);
@@ -173,7 +172,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
 	                  onClick={() => {
 	                    const next = !comfortModeEnabled;
 	                    onComfortModeChange?.(next);
-	                    if (next) showToast('Comfort mode on: ramps up smoothly and eases after rewinds.');
+	                    if (next) showToast('Comfort mode on: starts gently and slows down after rewinds.');
 	                  }}
 	                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:border-accent-red/60 focus-visible:shadow-glow ${
 	                    comfortModeEnabled

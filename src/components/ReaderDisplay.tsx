@@ -29,7 +29,6 @@ export const ReaderDisplay: React.FC<ReaderDisplayProps> = ({
   fitToWidth = false,
   textSizeClassName,
 }) => {
-  // Logic to process the word
   const getPivotIndex = (w: string) => {
     const len = w.length;
     if (len === 1) return 0;

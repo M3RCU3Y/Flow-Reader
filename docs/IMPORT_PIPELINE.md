@@ -1,10 +1,10 @@
 # Import Pipeline
 
-Flow Reader supports paste, TXT, PDF, DOCX, and URL imports. The import surface is intentionally local-first: imported text becomes a `Book`, and source provenance is stored on `Book.settings.sourceMeta`.
+Flow Reader supports paste, TXT, PDF, DOCX, and URL imports. Imported text becomes a `Book`, and source details are stored on `Book.settings.sourceMeta`.
 
 ## Entry Surface
 
-`src/components/TextInput.tsx` owns the import UI:
+`src/components/TextInput.tsx` handles the import UI:
 
 - paste/manual text entry
 - TXT file reading
@@ -13,7 +13,7 @@ Flow Reader supports paste, TXT, PDF, DOCX, and URL imports. The import surface 
 - URL import profile selection, cleanup preview, and blocked-page fallback
 - fullscreen editor
 
-This file is a good candidate for future hook/component extraction, but behavior should stay covered by the QA flows before and after any split.
+If this file gets split into hooks or smaller components, run the related QA flows before and after the change.
 
 ## PDF
 
@@ -47,9 +47,9 @@ The fixture-backed test is `src/services/urlImportService.test.ts`, using `src/s
 
 For the ESP32 forum fixture, the cleaner should:
 
-- keep core post content such as `I am trying to use multiple usb serial devices with ESP32-S3 host.`
-- keep readable context such as `I followed this reference, and also checked the example.`
-- remove forum chrome such as `ESP32 Forum`, `Board index`, `Quick links`, `FAQ`, `Login`, and `Register`
+- keep the main post content, including `I am trying to use multiple usb serial devices with ESP32-S3 host.`
+- keep useful context, including `I followed this reference, and also checked the example.`
+- remove forum chrome like `ESP32 Forum`, `Board index`, `Quick links`, `FAQ`, `Login`, and `Register`
 - remove reference definitions like `[1]: https://...`
 - avoid giant URL-like RSVP tokens
 

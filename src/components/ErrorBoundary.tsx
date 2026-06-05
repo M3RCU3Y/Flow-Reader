@@ -17,7 +17,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Keep a breadcrumb in the console for debugging; UI stays user-friendly.
+    // Keep crash details in the console for debugging.
     console.error('Flow Reader crashed:', error, errorInfo);
     this.setState({ error, errorInfo });
   }
@@ -47,7 +47,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             </button>
           </div>
 
-          {/* Keep details available for devs without overwhelming normal users. */}
+          {/* Expose stack details behind a collapsed disclosure. */}
           <details className="mt-5 text-xs text-text-secondary/80">
             <summary className="cursor-pointer select-none">Error details</summary>
             <pre className="mt-2 whitespace-pre-wrap break-words bg-black/20 border border-text-primary/10 rounded-lg p-3">

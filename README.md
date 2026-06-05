@@ -1,6 +1,6 @@
 # Flow Reader
 
-Flow Reader is a local-first reading workspace for moving through long text with speed, focus, and control. It combines RSVP, Bionic Flow, document imports, themes, bookmarks, notes, and session summaries in a polished browser app.
+Flow Reader helps you read long articles, PDFs, notes, and saved text in the browser. It gives you RSVP, Bionic Flow, imports, themes, bookmarks, notes, and session recaps without sending your library anywhere.
 
 Everything is stored locally in your browser (no accounts, no sync).
 
@@ -10,9 +10,9 @@ https://m3rcu3y.github.io/Flow-Reader/
 
 ## Features
 
-- RSVP word-by-word reading with smart timing and comfort controls.
-- RSVP+ for context-enhanced reading on desktop and landscape layouts.
-- Bionic Flow for scrollable, focused reading with progress-aware navigation.
+- RSVP word-by-word reading with adjustable speed and pauses.
+- RSVP+ shows nearby words for more context on wider screens.
+- Bionic Flow gives you scrollable reading that keeps progress in sync.
 - PDF import with text extraction, password handling, cancellation, and OCR fallback for scanned pages.
 - DOCX, TXT, pasted text, and article URL import.
 - URL cleanup preview for removing page chrome, forum noise, references, and long raw links.
@@ -24,7 +24,7 @@ https://m3rcu3y.github.io/Flow-Reader/
 ## Project Map
 
 - App source lives in `src/`.
-- Future agents should start with `docs/CODEMAP.md` for the codebase tour.
+- Start with `docs/CODEMAP.md` for the codebase tour.
 - Development commands and environment notes live in `docs/DEVELOPMENT.md`.
 - Import behavior is documented in `docs/IMPORT_PIPELINE.md`.
 - Manual verification flows live in `QA.md`.

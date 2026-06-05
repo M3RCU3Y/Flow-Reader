@@ -5,7 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { registerSW } from 'virtual:pwa-register';
 import './styles.css';
 
-// Installable + offline-ish (cache after first load).
+// Register the PWA service worker for cached repeat loads.
 registerSW({ immediate: true });
 
 const rootElement = document.getElementById('root');

@@ -114,7 +114,6 @@ export default function App() {
   const bionicHintFadeRef = useRef<number | null>(null);
   const bionicHintHideRef = useRef<number | null>(null);
 
-  // Initialize library
   useEffect(() => {
     setLibrary(getLibrary());
   }, []);
@@ -214,7 +213,6 @@ export default function App() {
     saveBook(newBook);
     setLibrary(getLibrary());
     setActiveBook(newBook);
-    // Enter Focus Mode
     setIsSidebarOpen(false);
   };
 
@@ -246,7 +244,6 @@ export default function App() {
     }
     setActiveBook(nextBook);
     setResumePromptBook(null);
-    // Enter Focus Mode
     setIsSidebarOpen(false);
   };
 
@@ -266,7 +263,6 @@ export default function App() {
       setLibrary(getLibrary());
     }
     setActiveBook(null);
-    // Return to Dashboard View
     setIsSidebarOpen(true);
   };
 
@@ -439,10 +435,8 @@ export default function App() {
     return slice ? `“${slice}…”` : '';
   };
 
-  // Toggle Sidebar manually
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-  // RSVP Hook
   const rsvp = useRSVP({
     initialText: activeBook?.text,
     initialIndex: activeBook?.progressIndex,
@@ -1456,7 +1450,6 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 2. RIGHT MAIN STAGE */}
       <main className="flex-1 h-full min-h-0 relative flex flex-col bg-app-bg">
         
         {/* Top Floating Toggle (Visible when sidebar is closed) */}
@@ -1591,8 +1584,8 @@ export default function App() {
 	                       type="button"
 	                       onClick={() => setIsSessionRecapOpen(true)}
 	                       className="h-9 px-3 flex items-center justify-center gap-2 rounded-lg bg-black/30 border border-text-primary/5 text-text-secondary hover:text-text-primary hover:border-text-primary/20 transition-colors text-xs font-semibold uppercase tracking-widest"
-	                       aria-label="Session review"
-	                       title="Session review"
+	                       aria-label="Session recap"
+	                       title="Session recap"
 	                     >
                          <ChartColumn className="w-3.5 h-3.5" />
                          <span className="hidden sm:inline">Session</span>

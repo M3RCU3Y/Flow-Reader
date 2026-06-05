@@ -36,7 +36,7 @@ npm run build
 
 ## Environment Notes
 
-- The app is local-first. Library entries, preferences, themes, and summaries are stored in browser localStorage.
+- Library entries, preferences, themes, and summaries are stored in browser localStorage.
 - PDF parsing depends on PDF.js loaded from CDN in `index.html`.
 - OCR fallback uses `tesseract.js`.
 - DOCX import uses `mammoth`.
@@ -46,6 +46,6 @@ npm run build
 ## Source Conventions
 
 - Keep app code under `src/`.
-- Prefer service modules for pure or side-effect-isolated logic.
+- Prefer service modules for pure logic and browser-storage wrappers.
 - Prefer focused components/hooks over adding more responsibilities to `App.tsx` or `TextInput.tsx`.
 - Keep import and reading-mode changes covered by either Vitest or `QA.md` manual checks.

@@ -174,7 +174,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     const demoTitle = 'Demo: Flow Reader';
     const demoText =
       `Welcome to Flow Reader.\n\n` +
-      `This is a short demo document so you can try RSVP and Bionic mode right away.\n\n` +
+      `Here is a short demo document so you can try RSVP and Bionic mode right away.\n\n` +
       `RSVP tip: Start around 250–350 WPM, then inch upward. If you find yourself rewinding, slow down 10–20%.\n\n` +
       `Bionic tip: The UI is hidden by default. Hover/touch the top edge to reveal the header, and the bottom edge to reveal settings.\n\n` +
       `Practice paragraph:\n` +
@@ -379,7 +379,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         setStatus('idle');
         setUrlImportState('blocked');
         setUrlImportMessage(
-          'Import succeeded but the content looks blocked or too noisy to read cleanly. Open the page in your browser, complete checks, then paste article text.'
+          'We reached the page, but the text is not readable yet. Open it in your browser, finish any checks, then paste the article text.'
         );
         setBlockedSourceUrl(url);
         resetProgress();
@@ -406,7 +406,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       });
       setStatus('idle');
       setUrlImportState('idle');
-      setUrlImportMessage('Review import cleanup below before loading into the reader.');
+      setUrlImportMessage('Check the cleanup before adding it to your library.');
       resetProgress();
     } catch (e: any) {
       console.error(e);
@@ -418,9 +418,9 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         setStatus('error');
         setUrlImportState('error');
         setUrlImportMessage(
-          'Could not import this URL automatically. Try again, or open the page and paste the text.'
+          'Could not import this URL. Try again, or open the page and paste the text.'
         );
-        setErrorMessage('URL import failed. Check the link or use Open Source Page + Paste from Clipboard.');
+        setErrorMessage('URL import failed. Check the link, or open the source page and paste from the clipboard.');
       }
       resetProgress();
     } finally {
@@ -442,7 +442,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     setBlockedSourceUrl('');
     setUrlImportMessage(
       choice === 'raw'
-        ? 'Imported raw source text.'
+        ? 'Imported the original text.'
         : `Imported cleaned text (${preview.stats.removedLines} noisy lines removed).`
     );
     setUrlPreview(null);
@@ -501,11 +501,11 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       <div className="relative z-10 text-center mb-10">
         <h2 className="text-3xl font-header font-bold text-text-primary mb-2 drop-shadow-[0_10px_28px_rgba(0,0,0,0.5)]">
           Read <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">faster</span>,
-          retain <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">more</span>.
+          remember <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">more</span>.
         </h2>
         <p className="text-text-primary/72 drop-shadow-[0_6px_18px_rgba(0,0,0,0.42)]">Paste your text below or upload a document to begin.</p>
         <p className="text-xs text-text-secondary/80 mt-3 drop-shadow-[0_4px_14px_rgba(0,0,0,0.35)]">
-          Your library and preferences stay on this device (local browser storage).
+          Your library and preferences stay on this device.
         </p>
       </div>
 
@@ -546,7 +546,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
           onChange={(e) => {
             setText(e.target.value);
           }}
-          placeholder="Paste text here..."
+          placeholder="Paste text here…"
           className="w-full h-64 bg-transparent border-2 border-dashed border-text-secondary/25 rounded-xl p-6 pb-24 sm:pb-6 text-lg text-text-primary placeholder:text-text-primary/30 caret-accent-red focus:border-accent-red/60 focus:outline-none focus:bg-transparent focus:ring-0 focus:ring-offset-0 transition-colors duration-200 focus:shadow-glow resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
           style={{ WebkitOverflowScrolling: 'touch' }}
         />
@@ -655,7 +655,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         </button>
       </div>
       <p className="mt-2 text-center text-xs text-text-secondary/60">
-        URL import uses a public text extraction proxy for compatibility with most sites.
+        URL import sends the link to a public text extractor so more pages work.
       </p>
 
       {urlImportMessage && (
@@ -670,7 +670,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
 
       {urlImportState === 'blocked' && (
         <div className="mt-3 rounded-xl border border-text-primary/10 bg-panel-bg/70 p-4">
-          <h3 className="text-sm font-semibold text-text-primary">This page needs a quick browser check</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Open the page first</h3>
           <p className="mt-1 text-xs text-text-secondary">
             Some sites require CAPTCHA/login interaction before text extraction works. Open the source page,
             complete any checks, then paste article text here.
@@ -699,31 +699,31 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         <div className="mt-3 rounded-xl border border-text-primary/10 bg-panel-bg/70 p-4">
           <h3 className="text-sm font-semibold text-text-primary">Import preview</h3>
           <p className="mt-1 text-xs text-text-secondary">
-            {urlPreview.stats.removedLines} lines removed, {urlPreview.stats.rawUrlsRemoved} links normalized,
-            {` ${urlPreview.stats.suspiciousLeftovers}`} suspicious leftovers.
+            {urlPreview.stats.removedLines} lines removed, {urlPreview.stats.rawUrlsRemoved} links simplified,
+            {` ${urlPreview.stats.suspiciousLeftovers}`} possible leftovers.
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-widest">
             <span className={`rounded-full border px-2 py-1 ${confidenceClasses[urlPreview.titleConfidence]}`}>
-              Title {CONFIDENCE_LABELS[urlPreview.titleConfidence]}
+              Title confidence: {CONFIDENCE_LABELS[urlPreview.titleConfidence]}
             </span>
             <span className={`rounded-full border px-2 py-1 ${confidenceClasses[urlPreview.sourceConfidence]}`}>
-              Source {CONFIDENCE_LABELS[urlPreview.sourceConfidence]}
+              Source confidence: {CONFIDENCE_LABELS[urlPreview.sourceConfidence]}
             </span>
             <span className="rounded-full border border-text-primary/10 bg-black/20 px-2 py-1 text-text-secondary">
               {urlPreview.cleanedWordCount}/{Math.max(urlPreview.rawWordCount, 1)} words kept
             </span>
             <span className="rounded-full border border-text-primary/10 bg-black/20 px-2 py-1 text-text-secondary">
-              {urlPreview.titleOrigin === 'page' ? 'Page title detected' : 'Fallback title'}
+              {urlPreview.titleOrigin === 'page' ? 'Page title detected' : 'Title guessed from URL'}
             </span>
           </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-text-primary/10 bg-black/20 px-3 py-3">
-              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Raw sample</p>
-              <p className="mt-2 text-xs text-text-secondary break-words">{urlPreview.rawExcerpt || 'No raw sample available.'}</p>
+              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Original preview</p>
+              <p className="mt-2 text-xs text-text-secondary break-words">{urlPreview.rawExcerpt || 'No original preview available.'}</p>
             </div>
             <div className="rounded-lg border border-text-primary/10 bg-black/20 px-3 py-3">
-              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Cleaned sample</p>
-              <p className="mt-2 text-xs text-text-primary/90 break-words">{urlPreview.cleanedExcerpt || 'No cleaned sample available.'}</p>
+              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Reader preview</p>
+              <p className="mt-2 text-xs text-text-primary/90 break-words">{urlPreview.cleanedExcerpt || 'No reader preview available.'}</p>
             </div>
           </div>
           {urlPreview.removedLineSamples.length > 0 && (
@@ -736,7 +736,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
           )}
           {urlPreview.suspiciousTokens.length > 0 && (
             <div className="mt-2 rounded-lg border border-text-primary/10 bg-black/20 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Potential leftovers</p>
+              <p className="text-[11px] uppercase tracking-widest text-text-secondary">Check these</p>
               <p className="mt-1 text-xs text-text-secondary break-words">
                 {urlPreview.suspiciousTokens.join(' • ')}
               </p>
@@ -748,14 +748,14 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
               onClick={() => applyUrlImportChoice('cleaned', urlPreview)}
               className="px-3 py-2 rounded-lg text-sm font-semibold bg-accent-red text-white shadow-glow hover:bg-accent-red/90 transition-colors"
             >
-              Use cleaned
+              Use cleaned text
             </button>
             <button
               type="button"
               onClick={() => applyUrlImportChoice('raw', urlPreview)}
               className="px-3 py-2 rounded-lg text-sm font-medium bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 hover:border-text-primary/20 transition-colors"
             >
-              Use raw
+              Use original text
             </button>
             <button
               type="button"
@@ -792,7 +792,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
               onChange={(e) => {
             setText(e.target.value);
           }}
-              placeholder="Paste text here..."
+              placeholder="Paste text here…"
               autoFocus
               className="w-full h-full min-h-0 rounded-xl border border-text-primary/10 bg-black/10 p-4 pb-28 text-base sm:text-lg text-text-primary placeholder:text-text-secondary/60 caret-accent-red focus:border-accent-red/60 focus:outline-none resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
               style={{ WebkitOverflowScrolling: 'touch' }}

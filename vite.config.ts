@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
           manifest: {
             name: 'Flow Reader',
             short_name: 'Flow Reader',
-            description: 'Local-first RSVP + Bionic speed reading with themes and robust imports.',
+            description: 'Local-first RSVP + Bionic speed reading with TXT, PDF, DOCX, and URL imports.',
             theme_color: '#0f0f10',
             background_color: '#0f0f10',
             display: 'standalone',
