@@ -1,0 +1,465 @@
+/*
+ * Flow Reader — Reading Weather
+ *
+ * The landing page should feel alive without behaving like a graphics demo.
+ * Motion is deliberately limited to transform/opacity so the moving layers can
+ * stay on the compositor. The background also quiets itself while the editor is
+ * focused or already contains text.
+ */
+
+.reading-weather {
+  isolation: isolate;
+  contain: layout paint style;
+  background: rgb(var(--color-app-bg));
+}
+
+.reading-weather__base,
+.reading-weather__paper,
+.reading-weather__vignette,
+.reading-weather__typography,
+.reading-weather__currents {
+  position: absolute;
+  inset: 0;
+}
+
+.reading-weather__base {
+  background:
+    radial-gradient(circle at 50% 4%, rgba(255, 238, 230, 0.055), transparent 24rem),
+    radial-gradient(circle at 68% 24%, rgba(var(--color-accent), 0.052), transparent 30rem),
+    radial-gradient(circle at 20% 70%, rgba(116, 126, 154, 0.032), transparent 28rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.012), transparent 30%),
+    rgb(var(--color-app-bg));
+}
+
+.reading-weather__ink {
+  position: absolute;
+  border-radius: 999px;
+  opacity: 0.72;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.reading-weather__ink--warm {
+  left: 38%;
+  top: -9rem;
+  width: min(64rem, 86vw);
+  height: min(34rem, 45vw);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 230, 220, 0.105) 0%,
+    rgba(var(--color-accent), 0.066) 32%,
+    rgba(var(--color-accent), 0.018) 57%,
+    transparent 76%
+  );
+  animation: readingWeatherInkWarm 26s ease-in-out infinite alternate;
+}
+
+.reading-weather__ink--cool {
+  right: -17rem;
+  bottom: -9rem;
+  width: min(52rem, 72vw);
+  height: min(32rem, 44vw);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(115, 132, 175, 0.085) 0%,
+    rgba(88, 105, 148, 0.026) 46%,
+    transparent 76%
+  );
+  opacity: 0.46;
+  animation: readingWeatherInkCool 31s ease-in-out infinite alternate;
+}
+
+.reading-weather__typography {
+  overflow: hidden;
+  opacity: 1;
+  mask-image: radial-gradient(ellipse at 55% 39%, black 0%, rgba(0, 0, 0, 0.94) 43%, transparent 88%);
+  transition: opacity 650ms ease;
+}
+
+.reading-weather__word {
+  position: absolute;
+  display: block;
+  color: rgba(var(--color-text-primary), 0.034);
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 600;
+  line-height: 0.82;
+  letter-spacing: -0.075em;
+  white-space: nowrap;
+  user-select: none;
+  transform: translateZ(0);
+  transform-origin: center;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.reading-weather__word--remember {
+  top: -2%;
+  left: 17%;
+  font-size: clamp(6.5rem, 15vw, 13.5rem);
+  opacity: 0.78;
+  animation: readingWeatherWordA 33s ease-in-out infinite alternate;
+}
+
+.reading-weather__word--focus {
+  right: -4%;
+  top: 31%;
+  color: rgba(var(--color-accent), 0.048);
+  font-size: clamp(7rem, 17vw, 15rem);
+  opacity: 0.64;
+  animation: readingWeatherWordB 38s ease-in-out infinite alternate;
+}
+
+.reading-weather__word--meaning {
+  left: 34%;
+  bottom: -3%;
+  font-size: clamp(6.5rem, 14vw, 12rem);
+  opacity: 0.55;
+  animation: readingWeatherWordC 42s ease-in-out infinite alternate;
+}
+
+.reading-weather__word--read {
+  left: -2%;
+  top: 47%;
+  color: rgba(var(--color-accent), 0.036);
+  font-size: clamp(4rem, 9vw, 7.6rem);
+  opacity: 0.58;
+  animation: readingWeatherWordD 29s ease-in-out infinite alternate;
+}
+
+.reading-weather__word--mark {
+  right: 11%;
+  bottom: -12%;
+  font-size: clamp(12rem, 25vw, 22rem);
+  color: rgba(var(--color-text-primary), 0.025);
+  opacity: 0.7;
+  animation: readingWeatherWordMark 46s ease-in-out infinite alternate;
+}
+
+.reading-weather__paragraph {
+  position: absolute;
+  top: 16%;
+  right: -6.5rem;
+  width: min(35rem, 44vw);
+  margin: 0;
+  color: rgba(var(--color-text-primary), 0.035);
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: clamp(0.9rem, 1.4vw, 1.12rem);
+  font-weight: 300;
+  line-height: 2.05;
+  letter-spacing: 0.015em;
+  text-align: left;
+  transform: rotate(-8deg) translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  animation: readingWeatherParagraph 40s ease-in-out infinite alternate;
+}
+
+.reading-weather__currents {
+  overflow: hidden;
+  opacity: 0.72;
+  transition: opacity 650ms ease;
+}
+
+.reading-weather__current {
+  position: absolute;
+  left: 50%;
+  width: min(96rem, 118vw);
+  height: 1px;
+  transform-origin: center;
+  background: linear-gradient(
+    90deg,
+    transparent 4%,
+    rgba(var(--color-text-primary), 0.025) 21%,
+    rgba(var(--color-accent), 0.075) 48%,
+    rgba(var(--color-text-primary), 0.018) 74%,
+    transparent 96%
+  );
+  box-shadow: 0 0 24px rgba(var(--color-accent), 0.025);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.reading-weather__current::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+  background: inherit;
+  opacity: 0.17;
+  transform: scaleY(6);
+}
+
+.reading-weather__current--one {
+  top: 30%;
+  animation: readingWeatherCurrentA 30s ease-in-out infinite alternate;
+}
+
+.reading-weather__current--two {
+  top: 52%;
+  opacity: 0.55;
+  animation: readingWeatherCurrentB 35s ease-in-out infinite alternate;
+}
+
+.reading-weather__current--three {
+  top: 74%;
+  opacity: 0.42;
+  animation: readingWeatherCurrentC 40s ease-in-out infinite alternate;
+}
+
+.reading-weather__paper {
+  opacity: 0.25;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 2px,
+      rgba(var(--color-text-primary), 0.008) 2px,
+      rgba(var(--color-text-primary), 0.008) 3px
+    ),
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.15) 0 0.45px, transparent 0.65px),
+    radial-gradient(circle at 76% 64%, rgba(255,255,255,0.1) 0 0.4px, transparent 0.62px);
+  background-size: auto, 13px 17px, 19px 23px;
+  mask-image: linear-gradient(to bottom, black, transparent 92%);
+}
+
+.reading-weather__vignette {
+  background:
+    radial-gradient(
+      ellipse at 51% 38%,
+      transparent 0%,
+      rgba(7, 7, 9, 0.04) 44%,
+      rgba(7, 7, 9, 0.34) 78%,
+      rgba(7, 7, 9, 0.76) 100%
+    ),
+    linear-gradient(90deg, rgba(7,7,9,0.24), transparent 20%, transparent 80%, rgba(7,7,9,0.2));
+}
+
+/* The artwork quiets down when the user actually starts reading/writing. */
+main:has(textarea:focus) .reading-weather__typography,
+main:has(textarea:not(:placeholder-shown)) .reading-weather__typography {
+  opacity: 0.34;
+}
+
+main:has(textarea:focus) .reading-weather__currents,
+main:has(textarea:not(:placeholder-shown)) .reading-weather__currents {
+  opacity: 0.27;
+}
+
+main:has(textarea:focus) .reading-weather__word,
+main:has(textarea:not(:placeholder-shown)) .reading-weather__word,
+main:has(textarea:focus) .reading-weather__paragraph,
+main:has(textarea:not(:placeholder-shown)) .reading-weather__paragraph {
+  animation-play-state: paused;
+}
+
+/* Fix the landing headline crop seen in the first visual pass. */
+.idle-content-veil + div > div:first-child h2 {
+  overflow: visible !important;
+  padding: 0.08em 0.08em 0.16em;
+  line-height: 1.01 !important;
+}
+
+.idle-content-veil + div > div:first-child h2 span {
+  display: inline-block;
+  overflow: visible;
+  padding: 0.02em 0.035em 0.1em;
+  margin: -0.02em -0.035em -0.1em;
+}
+
+.idle-content-veil + div > div:first-child > p:first-of-type {
+  max-width: 34rem;
+}
+
+@keyframes readingWeatherInkWarm {
+  0% {
+    transform: translate3d(-7%, -2%, 0) scale(0.98);
+    opacity: 0.58;
+  }
+  100% {
+    transform: translate3d(3%, 5%, 0) scale(1.04);
+    opacity: 0.79;
+  }
+}
+
+@keyframes readingWeatherInkCool {
+  0% {
+    transform: translate3d(4%, 2%, 0) scale(1);
+    opacity: 0.34;
+  }
+  100% {
+    transform: translate3d(-5%, -5%, 0) scale(1.06);
+    opacity: 0.5;
+  }
+}
+
+@keyframes readingWeatherWordA {
+  0% {
+    transform: translate3d(-2.5%, -2%, 0) rotate(-1.5deg);
+    opacity: 0.43;
+  }
+  100% {
+    transform: translate3d(4%, 4%, 0) rotate(1.8deg);
+    opacity: 0.75;
+  }
+}
+
+@keyframes readingWeatherWordB {
+  0% {
+    transform: translate3d(3%, 0, 0) rotate(3deg);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate3d(-5%, 5%, 0) rotate(-1deg);
+    opacity: 0.66;
+  }
+}
+
+@keyframes readingWeatherWordC {
+  0% {
+    transform: translate3d(-4%, 3%, 0) rotate(1deg);
+    opacity: 0.34;
+  }
+  100% {
+    transform: translate3d(4%, -4%, 0) rotate(-2deg);
+    opacity: 0.58;
+  }
+}
+
+@keyframes readingWeatherWordD {
+  0% {
+    transform: translate3d(-1%, -5%, 0) rotate(-4deg);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate3d(7%, 4%, 0) rotate(1deg);
+    opacity: 0.55;
+  }
+}
+
+@keyframes readingWeatherWordMark {
+  0% {
+    transform: translate3d(2%, 6%, 0) rotate(-8deg);
+    opacity: 0.33;
+  }
+  100% {
+    transform: translate3d(-4%, -2%, 0) rotate(-3deg);
+    opacity: 0.58;
+  }
+}
+
+@keyframes readingWeatherParagraph {
+  0% {
+    transform: translate3d(2%, -2%, 0) rotate(-8deg);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate3d(-5%, 5%, 0) rotate(-5.5deg);
+    opacity: 0.82;
+  }
+}
+
+@keyframes readingWeatherCurrentA {
+  0% {
+    transform: translate3d(-54%, 0, 0) rotate(-5deg) scaleX(0.96);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate3d(-46%, 18px, 0) rotate(-1deg) scaleX(1.04);
+    opacity: 0.66;
+  }
+}
+
+@keyframes readingWeatherCurrentB {
+  0% {
+    transform: translate3d(-47%, 0, 0) rotate(3deg) scaleX(1.03);
+    opacity: 0.22;
+  }
+  100% {
+    transform: translate3d(-54%, -16px, 0) rotate(0deg) scaleX(0.97);
+    opacity: 0.5;
+  }
+}
+
+@keyframes readingWeatherCurrentC {
+  0% {
+    transform: translate3d(-52%, 0, 0) rotate(-2deg);
+    opacity: 0.16;
+  }
+  100% {
+    transform: translate3d(-46%, 13px, 0) rotate(2deg);
+    opacity: 0.4;
+  }
+}
+
+@media (max-width: 900px) {
+  .reading-weather__word--meaning,
+  .reading-weather__paragraph {
+    display: none;
+  }
+
+  .reading-weather__word--remember {
+    left: 7%;
+    top: 4%;
+  }
+
+  .reading-weather__word--focus {
+    right: -14%;
+    top: 39%;
+  }
+
+  .reading-weather__word--read {
+    left: -10%;
+    top: 62%;
+  }
+
+  .reading-weather__current--three {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .reading-weather__word--read,
+  .reading-weather__word--mark,
+  .reading-weather__current--two {
+    display: none;
+  }
+
+  .reading-weather__word--remember {
+    top: 11%;
+    left: -8%;
+    font-size: 6.5rem;
+  }
+
+  .reading-weather__word--focus {
+    top: 58%;
+    right: -18%;
+    font-size: 7.2rem;
+  }
+
+  .reading-weather__ink--warm {
+    left: 15%;
+    width: 34rem;
+    height: 22rem;
+  }
+
+  .reading-weather__ink--cool {
+    right: -18rem;
+    width: 34rem;
+    height: 24rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (update: slow) {
+  .reading-weather__ink,
+  .reading-weather__word,
+  .reading-weather__paragraph,
+  .reading-weather__current {
+    animation: none !important;
+    will-change: auto;
+  }
+
+  .reading-weather__typography,
+  .reading-weather__currents {
+    transition: none !important;
+  }
+}
