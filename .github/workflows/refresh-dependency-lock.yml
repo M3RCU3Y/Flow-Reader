@@ -1,0 +1,25 @@
+name: Refresh dependency lock
+
+on:
+  push:
+    branches: [agent/flow-reader-product-polish]
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Regenerate npm lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flow-reader-package-lock
+          path: package-lock.json
+          retention-days: 1
