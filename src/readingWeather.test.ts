@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const cssPath = fileURLToPath(new URL('./readingWeather.css', import.meta.url));
+const cssPath = fileURLToPath(new URL('./quietCurrent.css', import.meta.url));
 const css = readFileSync(cssPath, 'utf8');
 
 const extractKeyframeBodies = (source: string) => {
@@ -29,7 +29,7 @@ const extractKeyframeBodies = (source: string) => {
   return bodies;
 };
 
-describe('Reading Weather performance contract', () => {
+describe('Quiet Current performance contract', () => {
   it('keeps continuous keyframes on compositor-friendly properties', () => {
     const keyframes = extractKeyframeBodies(css);
     expect(keyframes.length).toBeGreaterThan(0);
@@ -66,5 +66,10 @@ describe('Reading Weather performance contract', () => {
   it('reduces decorative complexity on narrow screens', () => {
     expect(css).toContain('@media (max-width: 900px)');
     expect(css).toContain('@media (max-width: 560px)');
+  });
+
+  it('includes a focus hush state', () => {
+    expect(css).toContain('main:has(textarea:focus)');
+    expect(css).toContain('animation-play-state: paused');
   });
 });
