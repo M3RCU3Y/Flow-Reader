@@ -4,7 +4,7 @@ import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { registerSW } from 'virtual:pwa-register';
 import './styles.css';
-import './readingWeather.css';
+import './quietCurrent.css';
 
 // Register the PWA service worker for cached repeat loads.
 registerSW({ immediate: true });
