@@ -3,16 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="A local-first RSVP and Bionic Flow reader for articles, PDFs, documents, and notes." />
+    <meta name="theme-color" content="#0b0b0d" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="application-name" content="Flow Reader" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Flow Reader</title>
     <!-- No leading slash so icons resolve correctly under a GitHub Pages base path -->
     <link rel="icon" href="pwa-icon.svg" />
     <link rel="apple-touch-icon" href="pwa-icon.svg" />
-    
-    <!-- Google Fonts: Merriweather (Serif) and Inter (Sans-Serif) -->
+
+    <!-- Editorial heading + neutral UI typography. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:wght@300;400;700;900&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:wght@300;400;700;900&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -45,9 +51,9 @@
         window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       }
     </script>
-</head>
+  </head>
   <body class="bg-app-bg text-text-primary font-sans antialiased overflow-x-hidden selection:bg-accent-red selection:text-text-primary">
     <div id="root"></div>
-  <script type="module" src="/src/index.tsx"></script>
-</body>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
 </html>

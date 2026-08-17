@@ -31,7 +31,7 @@ https://m3rcu3y.github.io/Flow-Reader/
 
 ## Run Locally
 
-Prerequisites: Node.js
+Prerequisite: Node.js 24 or newer.
 
 ```bash
 npm install
@@ -44,9 +44,14 @@ Open the local URL printed by Vite (usually `http://localhost:3000`).
 
 ```bash
 npm run check
+npm run build
 ```
 
 `npm run check` runs TypeScript (`tsc --noEmit`) and the Vitest suite. Production builds are handled by the GitHub Pages workflow on `main`.
+
+## License
+
+Flow Reader is licensed under the [MIT License](LICENSE).
 
 ## Notes
 - The library, preferences, and themes use local browser storage.

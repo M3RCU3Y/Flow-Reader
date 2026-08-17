@@ -1,0 +1,303 @@
+/* Flow Reader — Quiet Current
+ * Minimal landing atmosphere: static light, paper depth, and three hairline
+ * curves with extremely slow compositor-only motion.
+ */
+
+.quiet-current {
+  isolation: isolate;
+  contain: layout paint style;
+  background: rgb(var(--color-app-bg));
+}
+
+.quiet-current__base,
+.quiet-current__lines,
+.quiet-current__paper,
+.quiet-current__vignette {
+  position: absolute;
+  inset: 0;
+}
+
+.quiet-current__base {
+  background:
+    radial-gradient(circle at 52% -8%, rgba(255,244,238,.055), transparent 25rem),
+    radial-gradient(circle at 66% 19%, rgba(var(--color-accent),.034), transparent 28rem),
+    linear-gradient(180deg, rgba(255,255,255,.01), transparent 34%),
+    rgb(var(--color-app-bg));
+}
+
+.quiet-current__light {
+  position: absolute;
+  border-radius: 999px;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.quiet-current__light--warm {
+  left: 48%;
+  top: 2%;
+  width: min(44rem, 62vw);
+  height: min(16rem, 24vw);
+  background: radial-gradient(ellipse at center,
+    rgba(255,230,220,.08) 0%,
+    rgba(var(--color-accent),.045) 38%,
+    rgba(var(--color-accent),.012) 62%,
+    transparent 80%);
+  opacity: .64;
+  animation: quietCurrentLight 34s ease-in-out infinite alternate;
+}
+
+.quiet-current__light--cool {
+  right: -10%;
+  bottom: 4%;
+  width: min(30rem, 44vw);
+  height: min(13rem, 20vw);
+  background: radial-gradient(ellipse at center,
+    rgba(110,123,158,.055) 0%,
+    rgba(88,101,138,.018) 52%,
+    transparent 80%);
+  opacity: .32;
+  animation: quietCurrentCool 42s ease-in-out infinite alternate;
+}
+
+.quiet-current__lines {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: .78;
+  transition: opacity 520ms ease;
+}
+
+.quiet-current__line-group {
+  fill: none;
+  stroke: url(#quiet-current-stroke);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transform-origin: center;
+  transform-box: fill-box;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.quiet-current__line-group--primary {
+  opacity: .8;
+  animation: quietCurrentPrimary 38s ease-in-out infinite alternate;
+}
+
+.quiet-current__line-group--secondary {
+  opacity: .5;
+  animation: quietCurrentSecondary 46s ease-in-out infinite alternate;
+}
+
+.quiet-current__trace {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  color: rgba(var(--color-text-primary),.055);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(.54rem,.7vw,.66rem);
+  font-weight: 500;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translate3d(-50%,0,0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  animation: quietCurrentTrace 31s ease-in-out infinite alternate;
+  transition: opacity 520ms ease;
+}
+
+.quiet-current__paper {
+  opacity: .15;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0, transparent 2px,
+      rgba(var(--color-text-primary),.007) 2px, rgba(var(--color-text-primary),.007) 3px),
+    radial-gradient(circle at 19% 27%, rgba(255,255,255,.1) 0 .4px, transparent .62px),
+    radial-gradient(circle at 76% 61%, rgba(255,255,255,.07) 0 .38px, transparent .6px);
+  background-size: auto, 17px 19px, 23px 29px;
+  mask-image: linear-gradient(to bottom, black 0%, black 66%, transparent 96%);
+}
+
+.quiet-current__vignette {
+  background:
+    radial-gradient(ellipse at 51% 37%, transparent 0%, rgba(7,7,9,.025) 50%,
+      rgba(7,7,9,.28) 78%, rgba(7,7,9,.7) 100%),
+    linear-gradient(90deg, rgba(7,7,9,.18), transparent 18%, transparent 83%, rgba(7,7,9,.16));
+}
+
+/* Hush decorative motion as soon as the editor becomes the task. */
+main:has(textarea:focus) .quiet-current__lines,
+main:has(textarea:not(:placeholder-shown)) .quiet-current__lines { opacity: .26; }
+
+main:has(textarea:focus) .quiet-current__trace,
+main:has(textarea:not(:placeholder-shown)) .quiet-current__trace { opacity: .18; }
+
+main:has(textarea:focus) .quiet-current__line-group,
+main:has(textarea:not(:placeholder-shown)) .quiet-current__line-group,
+main:has(textarea:focus) .quiet-current__light,
+main:has(textarea:not(:placeholder-shown)) .quiet-current__light,
+main:has(textarea:focus) .quiet-current__trace,
+main:has(textarea:not(:placeholder-shown)) .quiet-current__trace {
+  animation-play-state: paused;
+}
+
+/* Landing composition refinements. */
+.idle-content-veil {
+  background: radial-gradient(ellipse at center,
+    rgba(8,8,10,.5) 0%, rgba(8,8,10,.3) 38%, rgba(8,8,10,.08) 67%, transparent 86%);
+  filter: blur(22px);
+}
+
+.idle-content-veil + div { position: relative; isolation: isolate; }
+
+.idle-content-veil + div::before {
+  content: 'LOCAL-FIRST  ·  PRIVATE LIBRARY  ·  FOCUS MODE';
+  display: block;
+  width: fit-content;
+  margin: 0 auto 1rem;
+  padding: .38rem .66rem;
+  border: 1px solid rgba(var(--color-accent),.13);
+  border-radius: 999px;
+  background: rgba(var(--color-panel-bg),.34);
+  color: rgba(var(--color-text-secondary),.76);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+  backdrop-filter: blur(12px);
+  font-size: .57rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+}
+
+.idle-content-veil + div > div:first-child { margin-bottom: 1.6rem !important; }
+
+.idle-content-veil + div > div:first-child h2 {
+  max-width: 12ch;
+  overflow: visible !important;
+  margin-inline: auto;
+  margin-bottom: .85rem !important;
+  padding: .09em .08em .15em;
+  font-size: clamp(2.5rem,6vw,4.5rem) !important;
+  line-height: 1.01 !important;
+  letter-spacing: -.047em;
+  text-wrap: balance;
+  text-shadow: 0 18px 62px rgba(0,0,0,.5);
+}
+
+.idle-content-veil + div > div:first-child h2 span {
+  display: inline-block;
+  overflow: visible;
+  padding: .02em .035em .1em;
+  margin: -.02em -.035em -.1em;
+  color: rgb(var(--color-text-primary)) !important;
+  background: linear-gradient(115deg, rgb(var(--color-text-primary)) 8%, rgb(var(--color-accent)) 82%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.idle-content-veil + div > div:first-child > p:first-of-type {
+  max-width: 33rem;
+  margin-inline: auto;
+  color: rgba(var(--color-text-primary),.66) !important;
+  font-size: clamp(.94rem,1.7vw,1.04rem);
+  line-height: 1.62;
+  text-wrap: balance;
+}
+
+.idle-content-veil + div > div:first-child > p:last-of-type {
+  color: rgba(var(--color-text-secondary),.66) !important;
+  letter-spacing: .02em;
+}
+
+.idle-content-veil + div > .relative.group {
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 1.45rem;
+  background: linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.008)),
+    rgba(var(--color-panel-bg),.36);
+  padding: .36rem;
+  box-shadow: 0 26px 68px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.045);
+  backdrop-filter: blur(18px) saturate(115%);
+}
+
+.idle-content-veil + div > .relative.group::before {
+  content: 'READING DOCK';
+  position: absolute;
+  z-index: 5;
+  left: 1.2rem;
+  top: 1.05rem;
+  color: rgba(var(--color-text-secondary),.48);
+  font-size: .55rem;
+  font-weight: 800;
+  letter-spacing: .15em;
+  pointer-events: none;
+}
+
+.idle-content-veil + div textarea {
+  border: 1px solid rgba(255,255,255,.065) !important;
+  border-radius: 1.14rem !important;
+  background: rgba(0,0,0,.13) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.02), inset 0 0 28px rgba(0,0,0,.1);
+  padding-top: 3.05rem !important;
+  line-height: 1.65;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.idle-content-veil + div textarea:hover { border-color: rgba(255,255,255,.1) !important; }
+
+.idle-content-veil + div textarea:focus {
+  border-color: rgba(var(--color-accent),.32) !important;
+  background: rgba(0,0,0,.18) !important;
+  box-shadow: 0 0 0 3px rgba(var(--color-accent),.04),
+    inset 0 1px 0 rgba(255,255,255,.025), 0 16px 44px rgba(0,0,0,.16) !important;
+}
+
+@keyframes quietCurrentLight {
+  0% { transform: translate3d(-48%,-2%,0); opacity: .48; }
+  100% { transform: translate3d(-45%,4%,0); opacity: .66; }
+}
+@keyframes quietCurrentCool {
+  0% { transform: translate3d(0,0,0); opacity: .24; }
+  100% { transform: translate3d(-3%,-3%,0); opacity: .34; }
+}
+@keyframes quietCurrentPrimary {
+  0% { transform: translate3d(-9px,-4px,0); opacity: .62; }
+  100% { transform: translate3d(10px,6px,0); opacity: .88; }
+}
+@keyframes quietCurrentSecondary {
+  0% { transform: translate3d(8px,5px,0); opacity: .32; }
+  100% { transform: translate3d(-10px,-4px,0); opacity: .54; }
+}
+@keyframes quietCurrentTrace {
+  0% { transform: translate3d(-51%,0,0); opacity: .34; }
+  100% { transform: translate3d(-49%,-3px,0); opacity: .54; }
+}
+
+@media (max-width: 900px) {
+  .quiet-current__line-group--secondary,
+  .quiet-current__trace { display: none; }
+  .quiet-current__lines { opacity: .58; }
+  .quiet-current__light--warm { left: 40%; width: 42rem; height: 17rem; }
+  .idle-content-veil + div > div:first-child h2 { font-size: clamp(2.35rem,9vw,3.75rem) !important; }
+}
+
+@media (max-width: 560px) {
+  .quiet-current__line-group--secondary,
+  .quiet-current__trace,
+  .quiet-current__light--cool { display: none; }
+  .quiet-current__lines { opacity: .42; }
+  .quiet-current__light--warm { left: 25%; top: 5%; width: 30rem; height: 15rem; }
+  .idle-content-veil { filter: blur(16px); }
+  .idle-content-veil + div::before { margin-bottom: .85rem; padding-inline: .54rem; font-size: .51rem; letter-spacing: .105em; }
+  .idle-content-veil + div > div:first-child { margin-bottom: 1.3rem !important; }
+  .idle-content-veil + div > div:first-child h2 { font-size: clamp(2.15rem,11vw,3.15rem) !important; }
+  .idle-content-veil + div > .relative.group { padding: .27rem; border-radius: 1.2rem; }
+  .idle-content-veil + div > .relative.group::before { left: 1rem; top: 1rem; }
+  .idle-content-veil + div textarea { min-height: 15rem; border-radius: .98rem !important; padding-inline: 1rem !important; }
+}
+
+@media (prefers-reduced-motion: reduce), (update: slow) {
+  .quiet-current__light,
+  .quiet-current__line-group,
+  .quiet-current__trace { animation: none !important; }
+  .quiet-current__lines { opacity: .5; }
+  .quiet-current__trace { opacity: .32; }
+}
