@@ -14,17 +14,18 @@ type WordToken = {
   paragraphStart: boolean;
 };
 
-const parseWords = (text: string): WordToken[] => {
+export const parseWords = (text: string): WordToken[] => {
   const tokens: WordToken[] = [];
-  const re = /\S+|\n+/g;
+  const normalizedText = text.replace(/\r\n?/g, '\n');
+  const re = /\S+|\n(?:[ \t]*\n)*/g;
   let match: RegExpExecArray | null;
   let paragraphStart = true;
 
-  while ((match = re.exec(text))) {
+  while ((match = re.exec(normalizedText))) {
     const t = match[0] || '';
     if (!t) continue;
     if (t[0] === '\n') {
-      // Treat double-newlines as a paragraph boundary.
+      // Blank lines mark a new paragraph, including whitespace-only blank lines.
       if (t.length >= 2) paragraphStart = true;
       continue;
     }

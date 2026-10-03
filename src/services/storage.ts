@@ -1,4 +1,5 @@
 import { Book, BookSettings, SessionSummary } from '../types';
+import { sanitizeReaderPreferences } from './preferences';
 
 const STORAGE_KEY = 'focus_reader_library';
 const PREFS_KEY = 'focus_reader_prefs';
@@ -25,16 +26,67 @@ const parseJson = <T,>(key: string, fallback: T): T => {
   }
 };
 
-const normalizeBook = (book: Book): Book => {
-  const settings = book.settings || {};
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
+const finiteNumber = (value: unknown, fallback = 0): number => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+};
+
+const isSessionSummary = (value: unknown): value is SessionSummary => {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.bookId !== 'string') return false;
+  return ['startedAt', 'endedAt', 'wordsRead', 'avgWpm', 'rewinds', 'bookmarksAdded', 'notesAdded']
+    .every((key) => typeof value[key] === 'number' && Number.isFinite(value[key]) && value[key] >= 0);
+};
+
+const normalizeBook = (value: unknown): Book | null => {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.text !== 'string') return null;
+  const book = value as unknown as Book;
+  const words = Array.isArray(book.words) && (book.words.length > 0 || !book.text.trim())
+    && book.words.every((word) => typeof word === 'string')
+    ? book.words
+    : book.text.match(/\S+/g) || [];
+  const settings = isRecord(book.settings) ? book.settings : {};
+  const prefs = sanitizeReaderPreferences({ ...settings, lastMode: settings.mode });
+  const source = isRecord(settings.sourceMeta) ? settings.sourceMeta : null;
+  const sourceMeta = source && ['paste', 'pdf', 'docx', 'url'].includes(source.sourceType as string)
+    ? {
+      sourceType: source.sourceType as NonNullable<BookSettings['sourceMeta']>['sourceType'],
+      sourceUrl: typeof source.sourceUrl === 'string' ? source.sourceUrl : undefined,
+    }
+    : undefined;
   const normalizedSettings: BookSettings = {
     ...settings,
-    bookmarks: Array.isArray(settings.bookmarks) ? settings.bookmarks : [],
-    notes: Array.isArray(settings.notes) ? settings.notes : [],
+    mode: prefs.lastMode,
+    contextStrength: prefs.contextStrength,
+    bionicStrength: prefs.bionicStrength,
+    bionicFontSize: prefs.bionicFontSize,
+    lineWidth: prefs.lineWidth,
+    sourceMeta,
+    bionicScrollPercent: typeof settings.bionicScrollPercent === 'number' && Number.isFinite(settings.bionicScrollPercent)
+      ? Math.max(0, Math.min(1, settings.bionicScrollPercent))
+      : undefined,
+    lastSessionSummary: isSessionSummary(settings.lastSessionSummary) ? settings.lastSessionSummary : undefined,
+    bookmarks: Array.isArray(settings.bookmarks)
+      ? settings.bookmarks.filter((item) => isRecord(item) && typeof item.id === 'string'
+        && typeof item.index === 'number' && Number.isInteger(item.index) && item.index >= 0)
+        .map((item) => ({ ...item, createdAt: finiteNumber(item.createdAt), note: typeof item.note === 'string' ? item.note : undefined }))
+      : [],
+    notes: Array.isArray(settings.notes)
+      ? settings.notes.filter((item) => isRecord(item) && typeof item.id === 'string' && typeof item.text === 'string'
+        && typeof item.index === 'number' && Number.isInteger(item.index) && item.index >= 0)
+        .map((item) => ({ ...item, createdAt: finiteNumber(item.createdAt), updatedAt: finiteNumber(item.updatedAt) }))
+      : [],
   };
 
   return {
     ...book,
+    title: typeof book.title === 'string' ? book.title : 'Untitled',
+    words,
+    progressIndex: Math.max(0, Math.min(Math.max(0, words.length - 1), Math.floor(finiteNumber(book.progressIndex)))),
+    createdAt: finiteNumber(book.createdAt),
+    lastReadAt: finiteNumber(book.lastReadAt),
     settings: normalizedSettings,
   };
 };
@@ -86,8 +138,9 @@ export const updateBookTitle = (id: string, title: string): void => {
 };
 
 export const getLibrary = (): Book[] => {
-  const parsed = parseJson<Book[]>(STORAGE_KEY, []);
-  return parsed.map(normalizeBook);
+  const parsed = parseJson<unknown>(STORAGE_KEY, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map(normalizeBook).filter((book): book is Book => book !== null);
 };
 
 export const deleteBook = (id: string): Book[] => {
@@ -109,9 +162,10 @@ export const clearAllData = (): void => {
 };
 
 export const getAllSessionSummaries = (): SessionSummary[] => {
-  const parsed = parseJson<SessionSummary[]>(SESSION_SUMMARIES_KEY, []);
+  const parsed = parseJson<unknown>(SESSION_SUMMARIES_KEY, []);
+  if (!Array.isArray(parsed)) return [];
   return parsed
-    .filter((item) => item && typeof item.bookId === 'string')
+    .filter(isSessionSummary)
     .sort((a, b) => b.endedAt - a.endedAt);
 };
 

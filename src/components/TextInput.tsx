@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, Loader2, ArrowRight, X, Maximize2, ChevronDown } from 'lucide-react';
+import { Upload, Loader2, ArrowRight, X, Maximize2, ChevronDown, BookOpen, Link, ShieldCheck } from 'lucide-react';
 import { extractTextFromPDF } from '../services/pdfService';
 import {
   cleanImportedText,
@@ -17,7 +17,6 @@ interface TextInputProps {
     sourceMeta?: SourceMeta
   ) => void;
   onOpenHelp?: () => void;
-  onTryDemo?: (title: string, text: string) => void;
 }
 
 type UrlImportState = 'idle' | 'blocked' | 'error';
@@ -100,12 +99,15 @@ const isLikelyBotCheckResponse = (
   return false;
 };
 
-export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp, onTryDemo }) => {
+export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp }) => {
   const [text, setText] = useState('');
   const [title, setTitle] = useState('');
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const fullscreenRef = useRef<HTMLDivElement>(null);
+  const fullscreenOpenerRef = useRef<HTMLElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isFullscreenEditorOpen, setIsFullscreenEditorOpen] = useState(false);
 
@@ -133,10 +135,43 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     if (!isFullscreenEditorOpen) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (passwordResolverRef.current) return;
+      if (event.key === 'Escape') setIsFullscreenEditorOpen(false);
+      if (event.key !== 'Tab') return;
+      const controls = fullscreenRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), textarea:not(:disabled), input:not(:disabled)');
+      if (!controls?.length) return;
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      const opener = fullscreenOpenerRef.current;
+      if (opener?.isConnected) opener.focus();
+      else editorRef.current?.focus();
     };
   }, [isFullscreenEditorOpen]);
+
+  useEffect(() => () => {
+    abortControllerRef.current?.abort();
+    passwordResolverRef.current?.(null);
+  }, []);
+
+  const wordCount = useMemo(() => text.trim() ? text.trim().split(/\s+/).length : 0, [text]);
+
+  const openFullscreenEditor = () => {
+    fullscreenOpenerRef.current = document.activeElement as HTMLElement | null;
+    setIsFullscreenEditorOpen(true);
+  };
 
   const progressPercent = useMemo(() => {
     if (!progressTotal || progressTotal <= 0) return 0;
@@ -152,7 +187,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   };
 
   const handleStart = () => {
-    if (!text.trim()) return;
+    if (!text.trim() || status === 'processing') return;
     let finalTitle = title.trim();
     if (!finalTitle) {
       const firstLine = text
@@ -171,6 +206,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   const triggerFilePicker = () => fileInputRef.current?.click();
 
   const loadDemo = () => {
+    if (status === 'processing') return;
     const demoTitle = 'Demo: Flow Reader';
     const demoText =
       `Welcome to Flow Reader.\n\n` +
@@ -191,8 +227,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     setBlockedSourceUrl('');
     setUrlPreview(null);
     resetProgress();
-    onTryDemo?.(demoTitle, demoText);
-    onOpenHelp?.();
+    editorRef.current?.focus();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,13 +241,28 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     setErrorMessage('');
     setUrlPreview(null);
     resetProgress();
-    setTitle(file.name.replace(/\.(pdf|docx|txt)$/i, ''));
+    setUrlImportState('idle');
+    setUrlImportMessage('');
+    setBlockedSourceUrl('');
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    const ensureCurrentImport = () => {
+      if (controller.signal.aborted || abortControllerRef.current !== controller) {
+        throw new DOMException('Import cancelled', 'AbortError');
+      }
+    };
+    const applyFileText = (value: string, sourceType: SourceMeta['sourceType']) => {
+      ensureCurrentImport();
+      setTitle(file.name.replace(/\.(pdf|docx|txt)$/i, ''));
+      setSourceMeta({ sourceType });
+      setText(value);
+      setStatus('success');
+      resetProgress();
+    };
 
     try {
       const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
@@ -221,8 +271,8 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
         /\.docx$/i.test(file.name);
 
       if (isPdf) {
-        setSourceMeta({ sourceType: 'pdf' });
         const onProgress = (info: ExtractPdfProgressInfo) => {
+          if (controller.signal.aborted || abortControllerRef.current !== controller) return;
           setProgressStage(info.stage);
           setProgressPage(info.page);
           setProgressTotal(info.numPages);
@@ -231,6 +281,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
 
         const requestPassword = (info: { reason: 'need_password' | 'wrong_password' }) =>
           new Promise<string | null>((resolve) => {
+            if (controller.signal.aborted || abortControllerRef.current !== controller) {
+              resolve(null);
+              return;
+            }
             passwordResolverRef.current = resolve;
             setPasswordReason(info.reason);
             setPasswordDraft('');
@@ -249,9 +303,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
 
         try {
           const extractedText = await runExtract(false);
-          setText(extractedText);
-          setStatus('success');
-          resetProgress();
+          applyFileText(extractedText, 'pdf');
         } catch (err: any) {
           if (err?.name === 'PdfImportError' && err?.code === 'TOO_LARGE') {
             const pages = err?.details?.numPages ?? progressTotal;
@@ -260,38 +312,29 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
             );
             if (!ok) throw err;
             const extractedText = await runExtract(true);
-            setText(extractedText);
-            setStatus('success');
-            resetProgress();
+            applyFileText(extractedText, 'pdf');
           } else {
             throw err;
           }
         }
       } else if (isDocx) {
-        setSourceMeta({ sourceType: 'docx' });
         setProgressStage('loading');
         setProgressMessage('Importing DOCX…');
         setProgressPage(0);
         setProgressTotal(0);
 
         const buf = await file.arrayBuffer();
+        ensureCurrentImport();
         const mammoth = await import('mammoth');
+        ensureCurrentImport();
         const res = await mammoth.extractRawText({ arrayBuffer: buf });
         const value = (res?.value || '').replace(/\r\n/g, '\n').trim();
-        setText(value);
-        setStatus('success');
-        resetProgress();
+        applyFileText(value, 'docx');
       } else {
-        setSourceMeta({ sourceType: 'paste' });
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          setText(event.target?.result as string || '');
-          setStatus('success');
-          resetProgress();
-        };
-        reader.readAsText(file);
+        applyFileText(await file.text(), 'paste');
       }
     } catch (error) {
+      if (abortControllerRef.current !== controller) return;
       if (isCancelledFileImport(error, controller.signal)) {
         setStatus('idle');
         setErrorMessage('');
@@ -302,10 +345,11 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       }
       resetProgress();
     } finally {
-      abortControllerRef.current = null;
-      // If a password prompt is still open for any reason, close it.
-      setPasswordModalOpen(false);
-      passwordResolverRef.current = null;
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+        setPasswordModalOpen(false);
+        passwordResolverRef.current = null;
+      }
     }
   };
 
@@ -347,6 +391,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   }, [progressStage]);
 
   const importFromUrl = async () => {
+    if (status === 'processing') return;
     const url = normalizeUrlInput(urlDraft);
     if (!url) return;
 
@@ -370,6 +415,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       const res = await fetch(proxied, { signal: controller.signal });
       if (!res.ok) throw new Error(`Failed to fetch URL (${res.status})`);
       const raw = await res.text();
+      if (controller.signal.aborted || abortControllerRef.current !== controller) return;
       const parsed = parseProxyEnvelope(raw);
       const cleaned = cleanImportedText(parsed.body, {
         sourceUrl: url,
@@ -409,12 +455,13 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       setUrlImportMessage('Check the cleanup before adding it to your library.');
       resetProgress();
     } catch (e: any) {
-      console.error(e);
+      if (abortControllerRef.current !== controller) return;
       if (e?.name === 'AbortError') {
         setStatus('idle');
         setUrlImportState('idle');
         setUrlImportMessage('');
       } else {
+        console.error(e);
         setStatus('error');
         setUrlImportState('error');
         setUrlImportMessage(
@@ -424,7 +471,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       }
       resetProgress();
     } finally {
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === controller) abortControllerRef.current = null;
     }
   };
 
@@ -447,7 +494,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
     );
     setUrlPreview(null);
     if (choice === 'edit') {
-      setIsFullscreenEditorOpen(true);
+      openFullscreenEditor();
     }
   };
 
@@ -496,177 +543,61 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
   };
 
   return (
-    <div className="w-full animate-in fade-in zoom-in-95 duration-500">
+    <div className="landing-workspace w-full">
       
-      <div className="relative z-10 text-center mb-10">
-        <h2 className="text-3xl font-header font-bold text-text-primary mb-2 drop-shadow-[0_10px_28px_rgba(0,0,0,0.5)]">
-          Read <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">faster</span>,
-          remember <span className="text-accent-red drop-shadow-[0_0_18px_rgba(var(--color-accent),0.18)]">more</span>.
-        </h2>
-        <p className="text-text-primary/72 drop-shadow-[0_6px_18px_rgba(0,0,0,0.42)]">Paste your text below or upload a document to begin.</p>
-        <p className="text-xs text-text-secondary/80 mt-3 drop-shadow-[0_4px_14px_rgba(0,0,0,0.35)]">
-          Your library and preferences stay on this device.
-        </p>
+      <div className="landing-hero">
+        <p className="landing-eyebrow"><BookOpen size={14} aria-hidden="true" /> A little space to read</p>
+        <h1>Find your <span>reading rhythm.</span></h1>
+        <p className="landing-description">Bring an article, a chapter, or your notes. Set your pace and settle into the words.</p>
+        <p className="landing-privacy"><ShieldCheck size={14} aria-hidden="true" /> Your library stays on this device. No account needed.</p>
       </div>
-
-      <div className="relative group">
-        {status === 'processing' && (
-          <div className="absolute -top-3 left-6 right-6 z-10">
-            <div className="h-1.5 rounded-full bg-text-primary/10 overflow-hidden">
-              <div
-                className="h-full bg-progress transition-[width] duration-200"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-text-secondary/80 font-mono">
-              <span className="truncate">
-                {progressMessage || (stageLabel ? `${stageLabel}…` : 'Working…')}
-              </span>
-              {progressTotal > 0 && (
-                <span className="shrink-0 ml-3">
-                  {stageLabel ? `${stageLabel} ` : ''}
-                  {progressPage}/{progressTotal}
-                </span>
-              )}
-            </div>
+      <section className="reading-composer" aria-label="New reading" aria-busy={status === 'processing'}>
+        <div className="composer-heading">
+          <label htmlFor="reading-text">Your next read</label>
+          <button type="button" onClick={openFullscreenEditor} disabled={status === 'processing'} className="composer-expand" aria-label="Open fullscreen editor" title="Fullscreen editor"><Maximize2 size={16} aria-hidden="true" /></button>
+        </div>
+        <textarea id="reading-text" ref={editorRef} value={text} disabled={status === 'processing'} onChange={(e) => setText(e.target.value)} placeholder="Paste something you want to read…" aria-describedby="reading-info" className="composer-text" />
+        {wordCount > 0 && (
+          <div className="composer-title">
+            <label htmlFor="reading-title">Title</label>
+            <input id="reading-title" value={title} onChange={(e) => setTitle(e.target.value)} disabled={status === 'processing'} placeholder="Optional — we'll use the first line" maxLength={200} />
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => setIsFullscreenEditorOpen(true)}
-          disabled={status === 'processing'}
-          className="absolute top-4 right-4 z-20 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-panel-bg/80 border border-text-primary/10 text-text-secondary hover:text-text-primary hover:border-text-primary/25 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          aria-label="Open fullscreen editor"
-          title="Fullscreen editor"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </button>
-        <textarea
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-          }}
-          placeholder="Paste text here…"
-          className="w-full h-64 bg-transparent border-2 border-dashed border-text-secondary/25 rounded-xl p-6 pb-24 sm:pb-6 text-lg text-text-primary placeholder:text-text-primary/30 caret-accent-red focus:border-accent-red/60 focus:outline-none focus:bg-transparent focus:ring-0 focus:ring-offset-0 transition-colors duration-200 focus:shadow-glow resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        />
-        
-        {/* Actions Bar inside */}
-        <div
-          className="absolute right-4 flex gap-2"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
-        >
-           <button
-             onClick={triggerFilePicker}
-             className="flex items-center gap-2 px-4 py-2 bg-panel-bg border border-text-primary/10 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-all font-medium"
-             disabled={status === 'processing'}
-           >
-             {status === 'processing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-             {status === 'processing'
-               ? `${stageLabel || 'Processing'}${progressTotal > 0 ? ` (${progressPage}/${progressTotal})` : '…'}`
-               : 'Upload file'}
-           </button>
-
-           {status === 'processing' && (
-             <button
-               type="button"
-               onClick={cancelImport}
-               className="flex items-center gap-2 px-4 py-2 bg-panel-bg border border-text-primary/10 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-all font-medium"
-             >
-               <X className="w-4 h-4" />
-               Cancel
-             </button>
-           )}
-           
-           {text.trim() && (
-             <button
-               onClick={handleStart}
-               className="flex items-center gap-2 px-6 py-2 bg-accent-red text-white rounded-lg text-sm font-bold shadow-glow hover:bg-accent-red/90 transition-all"
-             >
-               Start Reading <ArrowRight className="w-4 h-4" />
-             </button>
-           )}
+        {status === 'processing' && (
+          <div className="composer-progress" role="status" aria-live="polite">
+            <div className="flex items-center gap-2"><Loader2 size={16} className="animate-spin" aria-hidden="true" /><span>{progressMessage || (stageLabel ? stageLabel + '…' : 'Importing…')}</span>{progressTotal > 0 && <span className="ml-auto shrink-0">{progressPage}/{progressTotal}</span>}</div>
+            {progressTotal > 0 && <progress value={progressPercent} max={100} aria-label="Import progress" />}
+          </div>
+        )}
+        <div className="composer-footer">
+          <p id="reading-info" className="composer-info">{wordCount ? wordCount.toLocaleString() + ' words · ~' + Math.max(1, Math.ceil(wordCount / 300)) + ' min at 300 WPM' : 'TXT, PDF, or DOCX · Or paste any text'}</p>
+          <div className="composer-actions">
+            {status === 'processing' ? <button type="button" onClick={cancelImport} className="composer-secondary"><X size={16} aria-hidden="true" /> Cancel import</button> : <button type="button" onClick={triggerFilePicker} className="composer-secondary"><Upload size={16} aria-hidden="true" /> Upload file</button>}
+            <button type="button" onClick={handleStart} disabled={!wordCount || status === 'processing'} className="composer-primary">Start reading <ArrowRight size={16} aria-hidden="true" /></button>
+          </div>
         </div>
-      </div>
-
-      <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-2">
-        <button
-          type="button"
-          onClick={loadDemo}
-          className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-bold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 hover:border-text-primary/20 transition-colors"
-        >
-          Try a demo
-        </button>
-        <button
-          type="button"
-          onClick={onOpenHelp}
-          className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-text-primary/5 transition-colors"
-        >
-          How to use
-        </button>
-      </div>
-
-      <div className="mt-4 flex flex-col sm:flex-row items-stretch justify-center gap-2">
-        <div className="relative w-full sm:w-auto">
-          <select
-            value={urlProfile}
-            onChange={(e) => {
-              setUrlProfile(e.target.value as UrlImportProfile);
-              setUrlImportMessage('');
-              setUrlPreview(null);
-            }}
-            disabled={status === 'processing'}
-            className="w-full min-w-0 sm:min-w-[7.25rem] appearance-none rounded-xl border border-text-primary/10 bg-panel-bg/55 pl-4 pr-11 py-3 text-sm font-medium text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
-            aria-label="URL import profile"
-          >
-            {URL_IMPORT_PROFILES.map((profile) => (
-              <option key={profile.value} value={profile.value} className="bg-panel-bg text-text-primary">
-                {profile.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary"
-            aria-hidden="true"
-          />
+      </section>
+      <form className="url-import" onSubmit={(e) => { e.preventDefault(); void importFromUrl(); }}>
+        <label htmlFor="article-url" className="url-heading"><Link size={14} aria-hidden="true" /> Or bring an article link</label>
+        <div className="url-import-fields">
+          <input id="article-url" value={urlDraft} type="text" inputMode="url" autoComplete="url" onChange={(e) => { setUrlDraft(e.target.value); setUrlImportState('idle'); setUrlImportMessage(''); setBlockedSourceUrl(''); setErrorMessage(''); setUrlPreview(null); }} placeholder="example.com/article" aria-describedby="url-disclosure" disabled={status === 'processing'} />
+          <div className="url-profile">
+            <select value={urlProfile} onChange={(e) => { setUrlProfile(e.target.value as UrlImportProfile); setUrlImportMessage(''); setUrlPreview(null); }} disabled={status === 'processing'} aria-label="URL import profile">
+              {URL_IMPORT_PROFILES.map((profile) => <option key={profile.value} value={profile.value}>{profile.label}</option>)}
+            </select>
+            <ChevronDown size={14} aria-hidden="true" />
+          </div>
+          <button type="submit" disabled={status === 'processing' || !urlDraft.trim()} className="composer-secondary">Import URL <ArrowRight size={14} aria-hidden="true" /></button>
         </div>
-        <input
-          value={urlDraft}
-          onChange={(e) => {
-            setUrlDraft(e.target.value);
-            setUrlImportState('idle');
-            setUrlImportMessage('');
-            setBlockedSourceUrl('');
-            setErrorMessage('');
-            setUrlPreview(null);
-          }}
-          placeholder="Paste an article URL…"
-          className="w-full sm:w-[28rem] rounded-xl border border-text-primary/10 bg-black/10 px-4 py-3 text-sm text-text-primary placeholder:text-text-secondary/60 focus:border-accent-red/60 focus:outline-none transition-colors duration-200"
-          aria-label="Article URL"
-          disabled={status === 'processing'}
-        />
-        <button
-          type="button"
-          onClick={importFromUrl}
-          disabled={status === 'processing' || !urlDraft.trim()}
-          className="px-4 py-3 rounded-xl text-sm font-bold bg-text-primary/10 border border-text-primary/10 text-text-primary hover:bg-text-primary/15 hover:border-text-primary/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          Import URL
-        </button>
+        <p id="url-disclosure">Links are sent to a public text extractor. Paste text above to keep it local.</p>
+      </form>
+      {urlImportMessage && <p role="status" aria-live="polite" className="mt-3 text-center text-sm text-text-secondary">{urlImportMessage}</p>}
+      <div className="landing-utilities">
+        <span>Nothing on hand?</span>
+        <button type="button" onClick={loadDemo} disabled={status === 'processing'}>Try a sample <ArrowRight size={13} aria-hidden="true" /></button>
+        <span className="utility-divider" aria-hidden="true">·</span>
+        <button type="button" onClick={onOpenHelp}>How it works</button>
       </div>
-      <p className="mt-2 text-center text-xs text-text-secondary/60">
-        URL import sends the link to a public text extractor so more pages work.
-      </p>
-
-      {urlImportMessage && (
-        <p
-          className={`mt-2 text-center text-xs ${
-            urlImportState === 'error' ? 'text-red-400' : 'text-text-secondary/80'
-          }`}
-        >
-          {urlImportMessage}
-        </p>
-      )}
 
       {urlImportState === 'blocked' && (
         <div className="mt-3 rounded-xl border border-text-primary/10 bg-panel-bg/70 p-4">
@@ -769,12 +700,12 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       )}
 
       {isFullscreenEditorOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-app-bg">
+        <div ref={fullscreenRef} role="dialog" aria-modal="true" aria-labelledby="fullscreen-title" className="fixed inset-0 z-50 flex flex-col bg-app-bg">
           <div
             className="flex items-center justify-between px-4 py-3 border-b border-text-primary/10"
             style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}
           >
-            <div className="text-sm font-semibold text-text-primary">Edit text</div>
+            <div id="fullscreen-title" className="text-sm font-semibold text-text-primary">Edit text</div>
             <button
               type="button"
               onClick={() => setIsFullscreenEditorOpen(false)}
@@ -790,8 +721,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
             <textarea
               value={text}
               onChange={(e) => {
-            setText(e.target.value);
-          }}
+                setText(e.target.value);
+              }}
+              aria-label="Reading text"
+              disabled={status === 'processing'}
               placeholder="Paste text here…"
               autoFocus
               className="w-full h-full min-h-0 rounded-xl border border-text-primary/10 bg-black/10 p-4 pb-28 text-base sm:text-lg text-text-primary placeholder:text-text-secondary/60 caret-accent-red focus:border-accent-red/60 focus:outline-none resize-none font-ui overflow-y-auto overscroll-contain touch-pan-y"
@@ -803,7 +736,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
             className="shrink-0 px-4 pt-3 border-t border-text-primary/10 bg-app-bg"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
           >
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 onClick={triggerFilePicker}
                 className="flex items-center gap-2 px-4 py-2 bg-panel-bg border border-text-primary/10 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:border-text-primary/30 transition-all font-medium"
@@ -833,9 +766,10 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
                     handleStart();
                     setIsFullscreenEditorOpen(false);
                   }}
+                  disabled={status === 'processing'}
                   className="flex items-center gap-2 px-6 py-2 bg-accent-red text-white rounded-lg text-sm font-bold shadow-glow hover:bg-accent-red/90 transition-all"
                 >
-                  Start Reading <ArrowRight className="w-4 h-4" />
+                  Start reading <ArrowRight className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -895,7 +829,7 @@ export const TextInput: React.FC<TextInputProps> = ({ onStartReading, onOpenHelp
       )}
 
       {status === 'error' && errorMessage && (
-        <p className="mt-4 text-center text-red-500 text-sm">
+        <p role="alert" className="mt-4 text-center text-red-500 text-sm">
           {errorMessage}
         </p>
       )}

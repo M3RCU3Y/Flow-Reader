@@ -342,161 +342,6 @@ aside::after {
   filter: blur(28px);
 }
 
-/* Landing workspace. TextInput is the sibling immediately following the veil. */
-.idle-content-veil + div {
-  position: relative;
-  isolation: isolate;
-}
-
-.idle-content-veil + div::before {
-  content: 'LOCAL-FIRST  ·  PRIVATE LIBRARY  ·  FOCUS MODE';
-  display: block;
-  width: fit-content;
-  margin: 0 auto 1.15rem;
-  padding: 0.42rem 0.72rem;
-  border: 1px solid rgba(var(--color-accent), 0.16);
-  border-radius: 999px;
-  background: rgba(var(--color-panel-bg), 0.46);
-  color: rgba(var(--color-text-secondary), 0.86);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.045);
-  backdrop-filter: blur(14px);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-}
-
-.idle-content-veil + div > div:first-child {
-  margin-bottom: 2rem !important;
-}
-
-.idle-content-veil + div > div:first-child h2 {
-  max-width: 12ch;
-  margin-inline: auto;
-  margin-bottom: 1rem !important;
-  font-size: clamp(2.55rem, 6.4vw, 4.65rem) !important;
-  line-height: 0.98;
-  letter-spacing: -0.045em;
-  text-wrap: balance;
-  text-shadow: 0 18px 70px rgba(0, 0, 0, 0.56);
-}
-
-.idle-content-veil + div > div:first-child h2 span {
-  color: rgb(var(--color-text-primary)) !important;
-  background: linear-gradient(115deg, rgb(var(--color-text-primary)) 8%, rgb(var(--color-accent)) 80%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.idle-content-veil + div > div:first-child > p:first-of-type {
-  max-width: 38rem;
-  margin-inline: auto;
-  color: rgba(var(--color-text-primary), 0.68) !important;
-  font-size: clamp(0.95rem, 2vw, 1.08rem);
-  line-height: 1.65;
-  text-wrap: balance;
-}
-
-.idle-content-veil + div > div:first-child > p:last-of-type {
-  color: rgba(var(--color-text-secondary), 0.7) !important;
-  letter-spacing: 0.025em;
-}
-
-.idle-content-veil + div > .relative.group {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1.65rem;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.012)),
-    rgba(var(--color-panel-bg), 0.42);
-  padding: 0.42rem;
-  box-shadow:
-    0 32px 80px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  backdrop-filter: blur(22px) saturate(120%);
-}
-
-.idle-content-veil + div > .relative.group::before {
-  content: 'READING DOCK';
-  position: absolute;
-  z-index: 5;
-  left: 1.35rem;
-  top: 1.2rem;
-  color: rgba(var(--color-text-secondary), 0.54);
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  pointer-events: none;
-}
-
-.idle-content-veil + div textarea {
-  border: 1px solid rgba(255, 255, 255, 0.075) !important;
-  border-radius: 1.3rem !important;
-  background:
-    radial-gradient(circle at 10% 0%, rgba(var(--color-accent), 0.035), transparent 32%),
-    rgba(0, 0, 0, 0.16) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.025),
-    inset 0 0 34px rgba(0, 0, 0, 0.12);
-  padding-top: 3.25rem !important;
-  line-height: 1.65;
-  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
-}
-
-.idle-content-veil + div textarea:hover {
-  border-color: rgba(255, 255, 255, 0.12) !important;
-}
-
-.idle-content-veil + div textarea:focus {
-  border-color: rgba(var(--color-accent), 0.42) !important;
-  background: rgba(0, 0, 0, 0.2) !important;
-  box-shadow:
-    0 0 0 4px rgba(var(--color-accent), 0.055),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 18px 50px rgba(0, 0, 0, 0.18) !important;
-}
-
-.idle-content-veil + div input,
-.idle-content-veil + div select {
-  min-height: 2.9rem;
-  border-color: rgba(255, 255, 255, 0.085) !important;
-  background: rgba(var(--color-panel-bg), 0.55) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(14px);
-}
-
-.idle-content-veil + div input:hover,
-.idle-content-veil + div select:hover {
-  border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-.idle-content-veil + div button {
-  min-height: 2.55rem;
-  border-radius: 0.8rem;
-  transition:
-    transform 160ms ease,
-    border-color 160ms ease,
-    background-color 160ms ease,
-    box-shadow 160ms ease,
-    color 160ms ease;
-}
-
-.idle-content-veil + div button:active {
-  transform: translateY(1px) scale(0.985);
-}
-
-.idle-content-veil + div button.bg-accent-red {
-  background: linear-gradient(135deg, rgb(var(--color-accent)), rgba(var(--color-accent), 0.8)) !important;
-  box-shadow:
-    0 10px 30px rgba(var(--color-accent), 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
-}
-
-.idle-content-veil + div button.bg-accent-red:hover {
-  box-shadow:
-    0 14px 38px rgba(var(--color-accent), 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
-}
-
 /* Reader mode switch ---------------------------------------------------- */
 .reader-mode-toggle {
   position: relative;
@@ -713,13 +558,6 @@ aside::after {
   background: rgba(var(--color-accent), 0.07);
 }
 
-/* Small motion polish --------------------------------------------------- */
-@media (hover: hover) {
-  .idle-content-veil + div button:hover {
-    transform: translateY(-1px);
-  }
-}
-
 @media (max-width: 768px) {
   .idle-light {
     filter: blur(58px);
@@ -788,37 +626,6 @@ aside::after {
     filter: blur(20px);
   }
 
-  .idle-content-veil + div::before {
-    margin-bottom: 0.9rem;
-    padding-inline: 0.58rem;
-    font-size: 0.54rem;
-    letter-spacing: 0.115em;
-  }
-
-  .idle-content-veil + div > div:first-child {
-    margin-bottom: 1.45rem !important;
-  }
-
-  .idle-content-veil + div > div:first-child h2 {
-    font-size: clamp(2.25rem, 11vw, 3.3rem) !important;
-  }
-
-  .idle-content-veil + div > .relative.group {
-    padding: 0.3rem;
-    border-radius: 1.3rem;
-  }
-
-  .idle-content-veil + div > .relative.group::before {
-    left: 1.05rem;
-    top: 1.05rem;
-  }
-
-  .idle-content-veil + div textarea {
-    min-height: 16rem;
-    border-radius: 1.05rem !important;
-    padding-inline: 1rem !important;
-  }
-
   .reader-mode-toggle__tab {
     min-width: 68px;
     padding-inline: 0.72rem;
@@ -848,8 +655,7 @@ aside::after {
 
   .reader-mode-toggle__indicator,
   .library-card,
-  .library-card__progress-fill,
-  .idle-content-veil + div button {
+  .library-card__progress-fill {
     transition-duration: 0.01ms !important;
   }
 }

@@ -482,8 +482,8 @@ export default function App() {
       sorted.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } else if (librarySort === 'progress') {
       sorted.sort((a, b) => {
-        const ap = a.words?.length ? a.progressIndex / a.words.length : 0;
-        const bp = b.words?.length ? b.progressIndex / b.words.length : 0;
+        const ap = a.words?.length ? a.progressIndex / Math.max(1, a.words.length - 1) : 0;
+        const bp = b.words?.length ? b.progressIndex / Math.max(1, b.words.length - 1) : 0;
         if (bp !== ap) return bp - ap;
         return (b.lastReadAt || 0) - (a.lastReadAt || 0);
       });
@@ -525,8 +525,8 @@ export default function App() {
     !isBionicScrolling &&
     (isBottomHotspotActive || isFooterHovered || isFooterFocused || isThemeEngaged);
 
-  const isHeaderVisible = !activeBook ? true : isBionicMode ? isHeaderVisibleBionic : isUiVisible;
-  const isFooterVisible = !activeBook ? true : isBionicMode ? isFooterVisibleBionic : isUiVisible;
+  const isHeaderVisible = !activeBook ? true : isBionicMode ? isHeaderVisibleBionic : isUiVisible || isHeaderHovered || (isHeaderFocused && !isNarrowViewport);
+  const isFooterVisible = !activeBook ? true : isBionicMode ? isFooterVisibleBionic : isUiVisible || isFooterHovered || (isFooterFocused && !isNarrowViewport);
   const isThemeVisible = !activeBook || (isBionicMode ? isFooterVisibleBionic : isUiVisible) || isThemeEngaged;
   const isAtBookEnd = Boolean(activeBook && rsvp.totalWords > 0 && rsvp.index >= rsvp.totalWords - 1);
   const showEndOfBookActions = Boolean(
@@ -1369,6 +1369,8 @@ export default function App() {
         />
       )}
       <aside 
+        inert={!isSidebarOpen}
+        aria-hidden={!isSidebarOpen}
         className={`
           h-full bg-panel-bg flex flex-col border-r border-text-primary/5 overflow-hidden
           transition-all duration-700 cubic-bezier(0.25, 1, 0.5, 1)
@@ -1387,9 +1389,9 @@ export default function App() {
         <div className="p-6 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
              <BrandMark className="w-8 h-8 shrink-0" />
-             <h1 className="font-header text-xl font-bold tracking-tight text-text-primary whitespace-nowrap">Flow Reader</h1>
+             <p className="font-header text-xl font-bold tracking-tight text-text-primary whitespace-nowrap">Flow Reader</p>
           </div>
-          <button onClick={toggleSidebar} className="text-text-secondary hover:text-text-primary transition-colors">
+          <button onClick={toggleSidebar} aria-label="Close Library" className="text-text-secondary hover:text-text-primary transition-colors min-w-11 min-h-11 flex items-center justify-center">
             <PanelLeftClose className="w-5 h-5" />
           </button>
         </div>
@@ -1434,6 +1436,8 @@ export default function App() {
              onSelect={handleSelectBook} 
              onDelete={handleDelete}
              activeId={activeBook?.id}
+             isFiltered={Boolean(libraryQuery.trim()) || librarySourceFilter !== 'all'}
+             onResetFilters={() => { setLibraryQuery(''); setLibrarySourceFilter('all'); }}
              emptyMessage={library.length === 0 ? 'No readings yet.' : 'No readings match this search or filter.'}
            />
         </div>
@@ -1450,7 +1454,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="flex-1 h-full min-h-0 relative flex flex-col bg-app-bg">
+      <main className="flex-1 h-full min-h-0 min-w-0 relative flex flex-col bg-app-bg">
         
         {/* Top Floating Toggle (Visible when sidebar is closed) */}
         {!isSidebarOpen && !activeBook && (
@@ -1458,6 +1462,7 @@ export default function App() {
              onClick={toggleSidebar}
              className="absolute top-6 left-6 z-50 p-2 bg-black/20 backdrop-blur-md rounded-lg text-text-secondary hover:text-text-primary border border-text-primary/5 hover:border-text-primary/20 transition-all shadow-xl"
              title="Open Library"
+             aria-label="Open Library"
            >
              <Menu className="w-5 h-5" />
            </button>
@@ -1466,7 +1471,7 @@ export default function App() {
 	        {/* Content Area */}
 	        <div
             className={`flex-1 w-full h-full min-h-0 flex flex-col items-center relative ${
-              !activeBook ? 'overflow-y-auto justify-start sm:justify-center py-8 sm:py-0' : 'justify-center'
+              !activeBook ? 'landing-scroll overflow-y-auto justify-start' : 'justify-center'
             }`}
             style={
               !activeBook
@@ -1480,7 +1485,7 @@ export default function App() {
               <>
                 <IdleBackdrop />
 	            <div
-                  className="relative z-10 w-full max-w-3xl px-8 fade-in animate-in slide-in-from-bottom-4 duration-700"
+                  className="landing-shell relative z-10 w-full max-w-3xl px-5 sm:px-8"
                   style={
                     showDashboardHamburger && isNarrowViewport
                       ? { paddingTop: 'calc(env(safe-area-inset-top) + 80px)' }
@@ -1494,9 +1499,6 @@ export default function App() {
 	                 <TextInput
 	                   onStartReading={handleStartNew}
 	                   onOpenHelp={() => setIsHelpOpen(true)}
-	                   onTryDemo={() => {
-                     if (!suppressHelp) setIsHelpOpen(true);
-                   }}
                  />
               </div>
               </>
